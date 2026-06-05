@@ -1,0 +1,642 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Guia de Replicação Ops</title>
+<style>body{font-family:Arial,sans-serif;line-height:1.5;color:#111;margin:40px;max-width:900px} h1,h2,h3{color:#0f172a} h1{font-size:28px} h2{font-size:22px;margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:6px} h3{font-size:18px;margin-top:22px} p,li{font-size:12pt} code{background:#f3f4f6;padding:1px 4px;border-radius:4px} hr{border:none;border-top:1px solid #ddd;margin:24px 0} ul,ol{margin:8px 0 12px 24px} blockquote{border-left:4px solid #cbd5e1;padding-left:12px;color:#334155;margin-left:0}</style></head><body>
+<h1>Guia de Replicação da Ferramenta de Visibilidade Operacional</h1>
+<h2>1. Objetivo do documento</h2>
+<p>Este documento explica como a ferramenta foi construída, quais regras de negócio foram aplicadas e como o time de Ops pode replicar a solução em outras áreas da empresa.</p>
+<p>O objetivo da ferramenta não é apenas consolidar dados em dashboards.</p>
+<p>O objetivo é transformar uma operação guiada por múltiplas planilhas em uma camada de decisão que responda, com rapidez:</p>
+<ul>
+<li>como está a carteira atual</li>
+<li>quais clientes estão saudáveis, em atenção ou em risco</li>
+<li>qual MRR está exposto</li>
+<li>quais clientes cada responsável deve priorizar na semana</li>
+<li>quais sinais de risco justificam ação imediata</li>
+</ul>
+<hr>
+<h2>2. O que foi construído</h2>
+<p>A solução foi construída como uma aplicação web em React + TypeScript, com leitura de planilhas Excel via <code>xlsx</code>.</p>
+<p>Hoje ela organiza a operação em três visões principais:</p>
+<h3>2.1. Direcionamento estratégico</h3>
+<p>Visão executiva da carteira atual.</p>
+<p>Responde perguntas como:</p>
+<ul>
+<li>quantos projetos estão abertos</li>
+<li>qual o MRR total</li>
+<li>quantos projetos estão em risco</li>
+<li>quantos clientes de carteira A e B estão em risco</li>
+<li>quanto de MRR da carteira A e B está em risco</li>
+<li>quantos projetos estão atrasados</li>
+<li>quantos projetos foram novos, encerrados ou perdidos</li>
+</ul>
+<h3>2.2. Health Score</h3>
+<p>Visão de saúde da carteira por cliente.</p>
+<p>Cada cliente recebe uma nota de <code>0 a 100</code> com base em:</p>
+<ul>
+<li>engajamento</li>
+<li>progresso do projeto</li>
+<li>risco</li>
+<li>contexto estratégico</li>
+</ul>
+<p>Essa camada foi desenhada para padronizar a leitura da operação e evitar priorização apenas por feeling.</p>
+<h3>2.3. Fila inteligente</h3>
+<p>Visão operacional de priorização.</p>
+<p>Responde:</p>
+<ul>
+<li>quem precisa ser atacado primeiro</li>
+<li>qual o motivo da priorização</li>
+<li>qual o risco executivo daquele cliente</li>
+<li>qual o MRR impactado</li>
+<li>qual ação recomendada para a semana</li>
+</ul>
+<hr>
+<h2>3. Fontes de dados usadas</h2>
+<p>Atualmente a ferramenta lê até 6 bases principais:</p>
+<ol>
+<li>`Projetos abertos por implanter`</li>
+<li>`Nota de finalização`</li>
+<li>`Projetos perdidos`</li>
+<li>`Projetos com oportunidade de cancelamento`</li>
+<li>`Novos projetos`</li>
+<li>`Resumo de clientes em implantação / inadimplência`</li>
+</ol>
+<p>Essas bases são carregadas via upload na interface e depois cruzadas por cliente.</p>
+<h3>3.1. Planilhas extraídas do Salesforce</h3>
+<p>Na prática, a ferramenta foi construída a partir de exportações do Salesforce.</p>
+<p>As planilhas utilizadas no projeto foram:</p>
+<ol>
+<li>`Projetos abertos por implanter`</li>
+</ol>
+<ul>
+<li>base principal da carteira atual</li>
+<li>traz responsável, fase, status, valor pago, fator de risco, tempo de projeto e classificação da carteira/projeto</li>
+</ul>
+<ol>
+<li>`Nota de finalização`</li>
+</ol>
+<ul>
+<li>usada para medir encerramentos, nota média de finalização e leitura por implanter</li>
+</ul>
+<ol>
+<li>`Projetos perdidos`</li>
+</ol>
+<ul>
+<li>usada para contabilizar perdas, MRR perdido e visão de perdidos por implanter</li>
+</ul>
+<ol>
+<li>`Projetos em aberto com oportunidade de cancelamento`</li>
+</ol>
+<ul>
+<li>usada para identificar risco de churn, tempo de vida do cliente no cancelamento e MRR ameaçado</li>
+</ul>
+<ol>
+<li>`Novos projetos`</li>
+</ol>
+<ul>
+<li>usada para contabilizar entradas recentes na carteira</li>
+</ul>
+<ol>
+<li>`Resumo de clientes em implantação / inadimplência`</li>
+</ol>
+<ul>
+<li>usada para sinais de adoção, engajamento, usuários pendentes, inadimplência e link de detalhe do cliente</li>
+</ul>
+<h3>3.2. Papel de cada base no modelo</h3>
+<p>Nem todas as planilhas têm o mesmo peso no cálculo.</p>
+<p>A lógica definida no projeto foi:</p>
+<ul>
+<li>`Projetos abertos por implanter`</li>
+<li>fonte soberana da carteira atual</li>
+<li>define quem está ou não está na carteira</li>
+</ul>
+<ul>
+<li>`Resumo de clientes em implantação / inadimplência`</li>
+<li>principal fonte de engajamento, inadimplência e sinais operacionais</li>
+</ul>
+<ul>
+<li>`Projetos em aberto com oportunidade de cancelamento`</li>
+<li>adiciona leitura de churn e risco de receita</li>
+</ul>
+<ul>
+<li>`Nota de finalização`</li>
+<li>mede desfecho e qualidade percebida da implantação</li>
+</ul>
+<ul>
+<li>`Projetos perdidos`</li>
+<li>mede perdas consolidadas e histórico de contas</li>
+</ul>
+<ul>
+<li>`Novos projetos`</li>
+<li>mede entradas e renovação da carteira</li>
+</ul>
+<h3>3.3. Recomendação de replicação para outras áreas</h3>
+<p>Se outra área da empresa quiser replicar a lógica, a melhor prática é preservar essa estrutura:</p>
+<ul>
+<li>uma planilha principal de carteira atual, extraída do Salesforce</li>
+<li>planilhas auxiliares de risco, desfecho, histórico e adoção</li>
+<li>uma regra clara sobre qual planilha é a fonte oficial da carteira</li>
+</ul>
+<p>Essa definição evita divergências como:</p>
+<ul>
+<li>clientes aparecendo em painéis sem estarem mais na carteira ativa</li>
+<li>total de clientes maior em uma aba do que em outra</li>
+<li>MRR distorcido por mistura entre carteira atual e histórico</li>
+</ul>
+<h3>3.4. Base principal da carteira</h3>
+<p>A planilha de <code>Projetos abertos por implanter</code> é a base principal da carteira atual.</p>
+<p>Ela é a referência para:</p>
+<ul>
+<li>total de projetos</li>
+<li>responsável do projeto</li>
+<li>status atual</li>
+<li>classificação da carteira/projeto</li>
+<li>MRR atual</li>
+<li>fator de risco</li>
+</ul>
+<p>As outras planilhas entram como enriquecimento.</p>
+<p>Elas não devem redefinir quem faz parte da carteira aberta.</p>
+<h3>3.5. Diretriz de replicação das extrações</h3>
+<p>Como essas bases vêm do Salesforce, a recomendação é documentar para cada área:</p>
+<ul>
+<li>nome do relatório no Salesforce</li>
+<li>objetivo do relatório</li>
+<li>frequência de exportação</li>
+<li>colunas obrigatórias</li>
+<li>dono responsável pela integridade da extração</li>
+</ul>
+<p>Um formato simples de governança por base pode ser:</p>
+<ul>
+<li>`Nome do relatório`</li>
+<li>`Sistema de origem`</li>
+<li>`Objetivo`</li>
+<li>`Responsável`</li>
+<li>`Periodicidade`</li>
+<li>`Colunas críticas`</li>
+<li>`Usos no dashboard`</li>
+</ul>
+<hr>
+<h2>4. Arquitetura lógica da solução</h2>
+<h3>4.1. Camadas</h3>
+<p>A solução foi montada em quatro camadas:</p>
+<ol>
+<li>`Ingestão`</li>
+</ol>
+<ul>
+<li>leitura das planilhas Excel</li>
+<li>identificação das colunas</li>
+</ul>
+<ol>
+<li>`Padronização`</li>
+</ol>
+<ul>
+<li>normalização dos nomes dos clientes</li>
+<li>conversão de datas</li>
+<li>conversão de números</li>
+<li>tratamento de campos vazios</li>
+</ul>
+<ol>
+<li>`Camada de decisão`</li>
+</ol>
+<ul>
+<li>cálculo do risco executivo</li>
+<li>cálculo do Health Score</li>
+<li>ordenação da fila</li>
+</ul>
+<ol>
+<li>`Visualização`</li>
+</ol>
+<ul>
+<li>dashboards executivos</li>
+<li>cards</li>
+<li>tabelas</li>
+<li>filtros</li>
+<li>documento HTML de priorização</li>
+</ul>
+<h3>4.2. Componentes principais do projeto</h3>
+<ul>
+<li>[`/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/components/Dashboard.tsx`](/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/components/Dashboard.tsx)</li>
+<li>orquestra uploads, filtros globais e tabs</li>
+</ul>
+<ul>
+<li>[`/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/components/ExecutiveOverview.tsx`](/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/components/ExecutiveOverview.tsx)</li>
+<li>visão executiva da carteira</li>
+</ul>
+<ul>
+<li>[`/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/components/HealthScorePanel.tsx`](/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/components/HealthScorePanel.tsx)</li>
+<li>leitura operacional de saúde da carteira</li>
+</ul>
+<ul>
+<li>[`/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/components/FunnelPanel.tsx`](/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/components/FunnelPanel.tsx)</li>
+<li>fila inteligente e priorização semanal</li>
+</ul>
+<ul>
+<li>[`/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/utils/parseExecutiveFiles.ts`](/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/utils/parseExecutiveFiles.ts)</li>
+<li>parser das planilhas executivas</li>
+</ul>
+<ul>
+<li>[`/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/utils/healthScore.ts`](/Users/pessoal/Documents/priorizacao-implantacao-dashboard/src/utils/healthScore.ts)</li>
+<li>regras do Health Score, risco executivo e ordenação da fila</li>
+</ul>
+<hr>
+<h2>5. Lógica de classificação da carteira</h2>
+<h3>5.1. Carteira A, B, C e D</h3>
+<p>A ferramenta prioriza a coluna de classificação que vier da base principal.</p>
+<p>Hoje ela aceita:</p>
+<ul>
+<li>`Classificação da carteira`</li>
+<li>`Classificação do projeto`</li>
+</ul>
+<p>Se a planilha vier com <code>Cliente Carteira A</code>, <code>Cliente Carteira B</code>, <code>Cliente Carteira C</code> ou <code>Cliente Carteira D</code>, a ferramenta converte internamente para:</p>
+<ul>
+<li>`A`</li>
+<li>`B`</li>
+<li>`C`</li>
+<li>`D`</li>
+</ul>
+<p>Se não houver classificação explícita, existe fallback por MRR:</p>
+<ul>
+<li>`A` se MRR &gt;= 2500</li>
+<li>`B` se MRR &gt;= 1200</li>
+<li>`C` se MRR &gt; 0</li>
+<li>`Não classificado` quando não há informação suficiente</li>
+</ul>
+<h3>5.2. Diretriz de replicação</h3>
+<p>Para replicar em outra área, a recomendação é:</p>
+<ul>
+<li>manter uma coluna oficial de classificação na base principal</li>
+<li>evitar depender de inferência por MRR quando o dado já existe</li>
+</ul>
+<hr>
+<h2>6. O que é considerado risco executivo</h2>
+<p>Existe uma diferença importante entre <code>Health Score</code> e <code>Risco executivo</code>.</p>
+<h3>6.1. Risco executivo</h3>
+<p>Risco executivo é uma régua direta, usada para liderança bater carteira rapidamente.</p>
+<p>Na versão atual, um cliente entra em risco executivo quando tiver qualquer um destes sinais:</p>
+<ul>
+<li>status `Parado`</li>
+<li>status `Necessita de ação`</li>
+<li>status `Com problemas` ou `Em andamento com problemas`</li>
+<li>qualquer texto preenchido em `Fator de risco`</li>
+</ul>
+<p>Em versões anteriores também existia leitura de <code>Em risco</code> / <code>Crítico</code>.</p>
+<p>Essa régua pode continuar ativa quando a operação quiser manter esse sinal como risco explícito.</p>
+<h3>6.2. Por que essa régua existe</h3>
+<p>Porque a liderança precisa de uma leitura mais objetiva e auditável da carteira.</p>
+<p>Ela é útil para responder:</p>
+<ul>
+<li>quantos clientes hoje já exigem atenção operacional</li>
+<li>quantos desses clientes estão na carteira A</li>
+<li>quanto de MRR está exposto</li>
+</ul>
+<h3>6.3. Exemplo prático</h3>
+<p>Se um cliente da <code>Carteira A</code> estiver com:</p>
+<ul>
+<li>status `Parado`</li>
+</ul>
+<p>ele entra como:</p>
+<ul>
+<li>`Carteira A em risco`</li>
+<li>`MRR da carteira A em risco`</li>
+</ul>
+<p>mesmo que o Health Score total dele ainda dependa de outros blocos.</p>
+<hr>
+<h2>7. Lógica do Health Score</h2>
+<p>O Health Score foi criado para sintetizar a saúde operacional do cliente em uma nota única de <code>0 a 100</code>.</p>
+<h3>7.1. Fórmula</h3>
+<p>Quando o engajamento se aplica:</p>
+<p><code></code><code>text</code></p>
+<p>Health Score =</p>
+<p>(Engajamento * 0,30) +</p>
+<p>(Progresso * 0,25) +</p>
+<p>(Risco * 0,25) +</p>
+<p>(Contexto Estratégico * 0,20)</p>
+<p><code></code><code></code></p>
+<h3>7.2. Classificação final</h3>
+<ul>
+<li>`80 a 100`: `Saudável`</li>
+<li>`50 a 79`: `Atenção`</li>
+<li>`0 a 49`: `Risco`</li>
+</ul>
+<h3>7.3. Bloco 1: Engajamento</h3>
+<p>Peso: <code>30%</code></p>
+<p>Fonte principal:</p>
+<ul>
+<li>planilha de resumo de clientes em implantação</li>
+</ul>
+<p>Sinais usados:</p>
+<ul>
+<li>faixa de engajamento</li>
+<li>percentual de uso, quando disponível</li>
+<li>usuários ativos vs usuários pendentes</li>
+</ul>
+<p>Pontuação atual:</p>
+<ul>
+<li>alto engajamento: `90+`</li>
+<li>médio: `68 a 72`</li>
+<li>baixo: `35 a 40`</li>
+<li>sem uso / sem informação: `10 a 18`</li>
+</ul>
+<h3>7.4. Regra importante de negócio</h3>
+<p>Engajamento só entra no score quando o cliente está em <code>Acompanhamento</code>.</p>
+<p>Antes disso:</p>
+<ul>
+<li>o bloco de engajamento fica como `N/A`</li>
+<li>o score é recalculado só com os outros três blocos</li>
+<li>o cliente não é penalizado por ainda não ter go-live</li>
+</ul>
+<h3>7.5. Proteção para projetos muito novos</h3>
+<p>Projetos com menos de <code>40 dias</code>:</p>
+<ul>
+<li>sem mensalidade vencida</li>
+<li>sem status de parado / risco</li>
+</ul>
+<p>não são forçados para <code>Atenção</code> ou <code>Risco</code> apenas por ainda estarem no começo.</p>
+<p>Na prática, o modelo protege a leitura para não punir projetos recém-iniciados.</p>
+<h3>7.6. Bloco 2: Progresso do projeto</h3>
+<p>Peso: <code>25%</code></p>
+<p>Sinais usados:</p>
+<ul>
+<li>fase atual</li>
+<li>status</li>
+<li>tempo de vida</li>
+<li>tempo sem atividade</li>
+<li>régua de prazo por perfil operacional</li>
+</ul>
+<p>Lógica aplicada hoje:</p>
+<ul>
+<li>fases finais / acompanhamento / resultado: score mais alto</li>
+<li>implantação / treinamento / ativação: score intermediário alto</li>
+<li>kickoff / início: score intermediário</li>
+<li>parado / necessita de ação / risco: score cai</li>
+</ul>
+<p>Prazo esperado:</p>
+<ul>
+<li>`MID`: 90 dias</li>
+<li>`SMB`: 60 dias</li>
+</ul>
+<h3>7.7. Bloco 3: Risco</h3>
+<p>Peso: <code>25%</code></p>
+<p>A nota começa em <code>100</code> e perde pontos conforme sinais aparecem.</p>
+<p>Sinais usados hoje:</p>
+<ul>
+<li>mensalidade vencida: `-30`</li>
+<li>oportunidade de cancelamento: `-25`</li>
+<li>fator de risco preenchido: `-18`</li>
+<li>projeto parado: `-24`</li>
+<li>necessita de ação: `-14`</li>
+<li>projeto com problemas: `-18`</li>
+<li>projeto em risco / crítico: `-18`</li>
+<li>muitos usuários pendentes: `-14`</li>
+<li>alguns usuários pendentes: `-8`</li>
+<li>baixo engajamento: `-14`</li>
+<li>histórico de perdido: `-8`</li>
+</ul>
+<h3>7.8. Bloco 4: Contexto estratégico</h3>
+<p>Peso: <code>20%</code></p>
+<p>Sinais usados:</p>
+<ul>
+<li>MRR</li>
+<li>carteira A/B/C/D</li>
+<li>segmento</li>
+<li>antiguidade do projeto</li>
+<li>oportunidade de cancelamento</li>
+</ul>
+<p>Faixas principais de score por MRR:</p>
+<ul>
+<li>MRR &gt;= 4000: score base alto</li>
+<li>MRR &gt;= 2500: score alto</li>
+<li>MRR &gt;= 1500: score intermediário alto</li>
+<li>MRR &gt;= 700: score intermediário</li>
+<li>MRR &gt; 0: score mais baixo</li>
+</ul>
+<p>Ajustes adicionais:</p>
+<ul>
+<li>carteira `A`: bônus estratégico</li>
+<li>carteira `B`: bônus intermediário</li>
+<li>cancelamento em cliente mais antigo: penalização</li>
+</ul>
+<hr>
+<h2>8. Lógica de priorização da fila</h2>
+<p>A fila não ordena só por risco.</p>
+<p>Ela combina peso de negócio e urgência operacional.</p>
+<h3>8.1. Ordem de priorização</h3>
+<p>A função de ordenação atual segue esta lógica:</p>
+<ol>
+<li>`Carteira A` primeiro</li>
+<li>depois `Carteira B`</li>
+<li>depois `Carteira C`</li>
+<li>depois `Carteira D`</li>
+<li>menor `Health Score` primeiro</li>
+<li>clientes com oportunidade de cancelamento sobem</li>
+<li>classificação `Risco` antes de `Atenção` antes de `Saudável`</li>
+<li>maior MRR primeiro</li>
+<li>projetos mais antigos primeiro</li>
+</ol>
+<h3>8.2. Motivo da priorização</h3>
+<p>Além da ordem, a ferramenta monta um campo de justificativa com sinais como:</p>
+<ul>
+<li>carteira A</li>
+<li>Health Score em risco</li>
+<li>oportunidade de cancelamento</li>
+<li>MRR relevante</li>
+<li>projeto parado</li>
+<li>tempo de vida alto</li>
+</ul>
+<p>Isso ajuda a liderança a entender não só quem está no topo, mas por quê.</p>
+<hr>
+<h2>9. Documento do implanter</h2>
+<p>A ferramenta gera um documento HTML compartilhável com:</p>
+<ul>
+<li>resumo da carteira</li>
+<li>top 5 clientes priorizados</li>
+<li>MRR total e MRR em risco</li>
+<li>motivadores de prioridade</li>
+<li>ação recomendada</li>
+<li>sugestão de agenda semanal</li>
+</ul>
+<p>Esse recurso foi pensado para transformar o dashboard em rotina operacional prática.</p>
+<p>Ou seja:</p>
+<ul>
+<li>a liderança analisa a carteira</li>
+<li>o implanter recebe uma lista concreta de ataque da semana</li>
+</ul>
+<hr>
+<h2>10. Regras de cruzamento e tratamento de dados</h2>
+<p>Para a replicação funcionar em outras áreas, esta camada é crítica.</p>
+<h3>10.1. Cruzamento por cliente</h3>
+<p>As planilhas são cruzadas principalmente por <code>nome do cliente</code>.</p>
+<p>Hoje existe limpeza básica, como:</p>
+<ul>
+<li>remoção de prefixo numérico do tipo `12345 - Cliente`</li>
+</ul>
+<h3>10.2. Campos vazios</h3>
+<p>Quando um dado não existe:</p>
+<ul>
+<li>a interface mostra `Sem informação`</li>
+<li>o cálculo tenta seguir sem quebrar</li>
+</ul>
+<h3>10.3. Colunas com nomes diferentes</h3>
+<p>A ferramenta já aceita mais de um nome possível para algumas colunas.</p>
+<p>Exemplo:</p>
+<ul>
+<li>`Classificação da carteira`</li>
+<li>`Classificação do projeto`</li>
+</ul>
+<p>Esse é um ponto importante para replicação:</p>
+<ul>
+<li>sempre mapear sinônimos de coluna</li>
+<li>nunca depender de um único cabeçalho fixo se a operação muda o export</li>
+</ul>
+<hr>
+<h2>11. Como replicar em outra área</h2>
+<h3>11.1. Passo 1: definir o objeto principal da carteira</h3>
+<p>Toda replicação precisa começar definindo:</p>
+<ul>
+<li>qual é a entidade principal</li>
+</ul>
+<p>Exemplos:</p>
+<ul>
+<li>clientes em implantação</li>
+<li>contas em ativação</li>
+<li>oportunidades em onboarding</li>
+<li>parceiros em setup</li>
+</ul>
+<p>Essa base principal precisa ter:</p>
+<ul>
+<li>responsável</li>
+<li>status atual</li>
+<li>data de início</li>
+<li>MRR ou valor relevante</li>
+<li>classificação estratégica</li>
+</ul>
+<h3>11.2. Passo 2: listar as fontes de enriquecimento</h3>
+<p>Depois da base principal, mapear planilhas auxiliares como:</p>
+<ul>
+<li>churn/cancelamento</li>
+<li>inadimplência</li>
+<li>NPS ou nota de finalização</li>
+<li>adoção/engajamento</li>
+<li>backlog de tarefas</li>
+<li>sinais de risco qualitativos</li>
+</ul>
+<h3>11.3. Passo 3: definir a régua executiva de risco</h3>
+<p>Antes do Health Score, a operação precisa decidir:</p>
+<ul>
+<li>o que é risco incontestável</li>
+</ul>
+<p>Exemplo:</p>
+<ul>
+<li>parado</li>
+<li>com problema</li>
+<li>sem atividade</li>
+<li>inadimplente</li>
+<li>com fator de risco</li>
+</ul>
+<p>Essa régua deve ser simples, auditável e fácil de explicar.</p>
+<h3>11.4. Passo 4: definir a fórmula do score</h3>
+<p>Os quatro blocos usados aqui funcionam bem como referência:</p>
+<ul>
+<li>engajamento</li>
+<li>progresso</li>
+<li>risco</li>
+<li>contexto estratégico</li>
+</ul>
+<p>Mas os pesos podem ser ajustados por área.</p>
+<h3>11.5. Passo 5: decidir a regra de priorização</h3>
+<p>Perguntas-chave:</p>
+<ul>
+<li>peso de negócio vem antes do risco?</li>
+<li>risco vem antes de MRR?</li>
+<li>contas novas precisam de proteção de score?</li>
+<li>oportunidades de cancelamento precisam subir na fila?</li>
+</ul>
+<h3>11.6. Passo 6: validar com o time operacional</h3>
+<p>A ferramenta só vira padrão quando o time reconhece a lógica como legítima.</p>
+<p>Por isso, a recomendação é:</p>
+<ol>
+<li>mostrar a primeira versão</li>
+<li>ouvir os casos onde “não bate”</li>
+<li>transformar esses casos em regras claras</li>
+<li>versionar a régua</li>
+</ol>
+<p>Esse foi exatamente o processo seguido aqui.</p>
+<hr>
+<h2>12. Lições aprendidas do projeto</h2>
+<h3>12.1. O maior desafio não é técnico</h3>
+<p>O maior desafio é alinhar regra de negócio.</p>
+<p>Quase todas as divergências mais relevantes surgiram de perguntas como:</p>
+<ul>
+<li>o que conta como risco?</li>
+<li>o que é carteira A de verdade?</li>
+<li>quando engajamento se aplica?</li>
+<li>cliente novo deve cair em atenção?</li>
+</ul>
+<h3>12.2. A base principal precisa ser soberana</h3>
+<p>Quando a fila foi montada usando a união de várias bases, os números inflaram.</p>
+<p>A correção foi:</p>
+<ul>
+<li>usar `Projetos abertos` como fonte soberana da carteira atual</li>
+<li>usar as demais planilhas só como enriquecimento</li>
+</ul>
+<p>Essa é uma regra importante para qualquer replicação.</p>
+<h3>12.3. Score sem explicação gera desconfiança</h3>
+<p>Por isso a interface não mostra só a nota.</p>
+<p>Ela também mostra:</p>
+<ul>
+<li>sinais de risco</li>
+<li>motivo da priorização</li>
+<li>risco executivo</li>
+<li>ação recomendada</li>
+</ul>
+<hr>
+<h2>13. Recomendações para institucionalizar como ferramenta da empresa</h2>
+<h3>13.1. Governança</h3>
+<p>Definir:</p>
+<ul>
+<li>dono da lógica de negócio</li>
+<li>dono da manutenção técnica</li>
+<li>dono da atualização das planilhas</li>
+</ul>
+<h3>13.2. Versionamento de regras</h3>
+<p>Manter um histórico simples de mudanças de régua:</p>
+<ul>
+<li>o que mudou</li>
+<li>por que mudou</li>
+<li>quando mudou</li>
+</ul>
+<h3>13.3. Padronização mínima das bases</h3>
+<p>Para escalar para outras áreas, vale criar um padrão de export com:</p>
+<ul>
+<li>identificador do cliente</li>
+<li>responsável</li>
+<li>data de início</li>
+<li>status</li>
+<li>classificação</li>
+<li>valor da conta</li>
+<li>sinal de risco</li>
+</ul>
+<h3>13.4. Ritual operacional</h3>
+<p>A ferramenta funciona melhor quando vira parte do ritual:</p>
+<ul>
+<li>batida semanal de carteira</li>
+<li>definição de top prioridades</li>
+<li>alinhamento entre liderança e operação</li>
+<li>acompanhamento da semana seguinte</li>
+</ul>
+<hr>
+<h2>14. Resumo executivo para apresentar ao time de Ops</h2>
+<p>Uma forma simples de explicar a ferramenta é:</p>
+<blockquote>
+<p>Construímos uma camada de visibilidade operacional que transforma várias planilhas da operação em um cockpit de decisão. A base principal é a carteira atual de projetos abertos. As demais bases enriquecem essa leitura com cancelamento, inadimplência, notas e histórico. Em cima disso, aplicamos duas leituras complementares: uma régua executiva de risco, simples e auditável, e um Health Score de 0 a 100 que combina engajamento, progresso, risco e contexto estratégico. O resultado é uma fila priorizada que mostra quem deve ser atacado primeiro, por qual motivo e com qual ação recomendada.</p>
+</blockquote>
+<hr>
+<h2>15. Próximos passos sugeridos para replicação</h2>
+<ol>
+<li>Escolher a próxima área piloto</li>
+<li>Definir a base principal da carteira dessa área</li>
+<li>Mapear as planilhas auxiliares</li>
+<li>Definir a régua executiva de risco local</li>
+<li>Ajustar pesos do score conforme o contexto</li>
+<li>Validar com o time operacional em uma primeira rodada</li>
+<li>Formalizar a régua como padrão da empresa</li>
+</ol>
+</body></html>

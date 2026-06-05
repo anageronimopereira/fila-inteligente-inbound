@@ -1,0 +1,21 @@
+.DS_Store
+.vite/
+*.tsbuildinfo
+
+# Dependencies and local runtimes
+node_modules/
+.nodeenv/
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+
+# Build outputs and local artifacts
+dist/
+outputs/
+
+# Local assistant/workspace state
+.claude/

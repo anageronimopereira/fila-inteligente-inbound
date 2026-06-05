@@ -1,0 +1,6 @@
+"Data Criacao Projeto Cs","Implantador Do Projeto C","Fase Do Projeto","Nome Cliente","Possui Mensalidade Vencida","Aplicativos Integrados","Tem B2B?","Usuarios Com Cadastro Pendente","Usuarios Vendedores","Faixa Engajamento Vendedores Emitindo 5 Pedidos Ou Mais Ult 3 Meses","Faixa Engajamento Vendedores Emitindo 5 Ou Mais Pedidos Ou Orcamentos Ult 3 Meses","Detalhar Cliente"
+"2026-01-10","Ana","Implantação","Loja Horizonte","Sim","Omie, Bling","Sim","28","35","01 (0-20%)","02 (20-40%)","https://example.com/cliente/loja-horizonte"
+"2026-02-02","Ana","Setup","Mercado Solar","Não","Tiny","Não","8","22","03 (40-60%)","03 (40-60%)","https://example.com/cliente/mercado-solar"
+"2026-01-28","Bruno","Acompanhamento","Grupo Atlas","Não","ERP próprio","Sim","18","24","02 (20-40%)","02 (20-40%)","https://example.com/cliente/grupo-atlas"
+"2026-03-01","Carla","Setup","Casa Nativa","Não","","Não","2","18","05 (80-100%)","06 (100%)","https://example.com/cliente/casa-nativa"
+"2025-12-20","Diego","Implantação","Comercial Prisma","Sim","Omie; Tiny","Não","21","30","01 (0-20%)","01 (0-20%)","https://example.com/cliente/comercial-prisma"
