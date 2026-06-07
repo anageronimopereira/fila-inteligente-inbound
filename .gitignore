@@ -5,6 +5,7 @@
 # Dependencies and local runtimes
 node_modules/
 .nodeenv/
+.tools/
 
 # Environment and secrets
 .env

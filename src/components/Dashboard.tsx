@@ -10,6 +10,10 @@ import { FunnelPanel } from "./FunnelPanel";
 import { HealthScorePanel } from "./HealthScorePanel";
 import { parseExecutiveFiles } from "../utils/parseExecutiveFiles";
 import {
+  readExecutiveFiles,
+  saveExecutiveFile,
+} from "../utils/persistedExecutiveFiles";
+import {
   applyOperationalContext,
   buildHealthRecords,
   type ManualRiskOverride,
@@ -68,6 +72,7 @@ export function Dashboard(): JSX.Element {
   const [executiveData, setExecutiveData] = useState<ExecutiveUploadsData | null>(preloadedDashboard.executiveData);
   const [executiveUploadIssues, setExecutiveUploadIssues] = useState<UploadIssue[]>(preloadedDashboard.executiveUploadIssues);
   const [manualOverrides, setManualOverrides] = useState<Record<string, ManualRiskOverride>>(() => readManualOverrides());
+  const [persistedFilesLoaded, setPersistedFilesLoaded] = useState(false);
 
   const implanters = useMemo(() => {
     const names = new Set<string>(DEFAULT_IMPLANTERS);
@@ -204,9 +209,66 @@ export function Dashboard(): JSX.Element {
     setExecutiveUploadIssues(result.issues);
   }
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPersistedFiles() {
+      try {
+        const files = await readExecutiveFiles();
+        if (!isMounted) {
+          return;
+        }
+
+        setExecutiveOpenProjectsFile(files.openProjects ?? null);
+        setExecutiveClosedProjectsFile(files.closedProjects ?? null);
+        setExecutiveLostProjectsFile(files.lostProjects ?? null);
+        setExecutiveCancellationFile(files.cancellationProjects ?? null);
+        setExecutiveNewProjectsFile(files.newProjects ?? null);
+        setExecutiveDelinquencyFile(files.delinquencyProjects ?? null);
+        setExecutiveContractValueFile(files.contractValueProjects ?? null);
+
+        await processExecutiveFiles({
+          openProjectsFile: files.openProjects ?? null,
+          closedProjectsFile: files.closedProjects ?? null,
+          lostProjectsFile: files.lostProjects ?? null,
+          cancellationProjectsFile: files.cancellationProjects ?? null,
+          newProjectsFile: files.newProjects ?? null,
+          delinquencyProjectsFile: files.delinquencyProjects ?? null,
+          contractValueProjectsFile: files.contractValueProjects ?? null,
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+        setExecutiveUploadIssues((current) => [
+          ...current,
+          {
+            fileName: "Planilhas salvas",
+            message:
+              error instanceof Error
+                ? `Não foi possível recarregar as planilhas salvas: ${error.message}`
+                : "Não foi possível recarregar as planilhas salvas.",
+            severity: "warning",
+          },
+        ]);
+      } finally {
+        if (isMounted) {
+          setPersistedFilesLoaded(true);
+        }
+      }
+    }
+
+    void loadPersistedFiles();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   async function handleExecutiveOpenProjectsUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setExecutiveOpenProjectsFile(file);
+    await saveExecutiveFile("openProjects", file);
     await processExecutiveFiles({
       openProjectsFile: file,
       closedProjectsFile: executiveClosedProjectsFile,
@@ -222,6 +284,7 @@ export function Dashboard(): JSX.Element {
   async function handleExecutiveClosedProjectsUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setExecutiveClosedProjectsFile(file);
+    await saveExecutiveFile("closedProjects", file);
     await processExecutiveFiles({
       openProjectsFile: executiveOpenProjectsFile,
       closedProjectsFile: file,
@@ -237,6 +300,7 @@ export function Dashboard(): JSX.Element {
   async function handleExecutiveLostProjectsUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setExecutiveLostProjectsFile(file);
+    await saveExecutiveFile("lostProjects", file);
     await processExecutiveFiles({
       openProjectsFile: executiveOpenProjectsFile,
       closedProjectsFile: executiveClosedProjectsFile,
@@ -252,6 +316,7 @@ export function Dashboard(): JSX.Element {
   async function handleExecutiveCancellationUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setExecutiveCancellationFile(file);
+    await saveExecutiveFile("cancellationProjects", file);
     await processExecutiveFiles({
       openProjectsFile: executiveOpenProjectsFile,
       closedProjectsFile: executiveClosedProjectsFile,
@@ -267,6 +332,7 @@ export function Dashboard(): JSX.Element {
   async function handleExecutiveNewProjectsUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setExecutiveNewProjectsFile(file);
+    await saveExecutiveFile("newProjects", file);
     await processExecutiveFiles({
       openProjectsFile: executiveOpenProjectsFile,
       closedProjectsFile: executiveClosedProjectsFile,
@@ -282,6 +348,7 @@ export function Dashboard(): JSX.Element {
   async function handleExecutiveDelinquencyUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setExecutiveDelinquencyFile(file);
+    await saveExecutiveFile("delinquencyProjects", file);
     await processExecutiveFiles({
       openProjectsFile: executiveOpenProjectsFile,
       closedProjectsFile: executiveClosedProjectsFile,
@@ -323,6 +390,7 @@ export function Dashboard(): JSX.Element {
   async function handleExecutiveContractValueUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setExecutiveContractValueFile(file);
+    await saveExecutiveFile("contractValueProjects", file);
     await processExecutiveFiles({
       openProjectsFile: executiveOpenProjectsFile,
       closedProjectsFile: executiveClosedProjectsFile,
@@ -393,6 +461,11 @@ export function Dashboard(): JSX.Element {
                 <strong style={styles.executiveUploadTitle}>Uploads do dashboard executivo</strong>
                 <p style={styles.executiveUploadText}>
                   Use estas planilhas para alimentar novos, encerrados, perdidos e oportunidades de cancelamento. Nas amostras recebidas, todos os arquivos vieram em XLSX.
+                </p>
+                <p style={styles.executiveUploadStorageText}>
+                  {persistedFilesLoaded
+                    ? "As planilhas ficam salvas neste navegador até você subir outra no mesmo campo."
+                    : "Carregando planilhas salvas neste navegador..."}
                 </p>
               </div>
               <div style={styles.executiveFilterField}>
@@ -932,6 +1005,13 @@ const styles: Record<string, CSSProperties> = {
     margin: 0,
     color: "#64748b",
     lineHeight: 1.6,
+  },
+  executiveUploadStorageText: {
+    margin: "8px 0 0",
+    color: "#0f7a45",
+    fontSize: "13px",
+    fontWeight: 700,
+    lineHeight: 1.45,
   },
   executiveFilterField: {
     display: "flex",
