@@ -122,6 +122,7 @@ function parseOpenProjectsMatrix(matrix: Matrix): ExecutiveOpenProjectRow[] {
   const idxWhyStopped = header.indexOf("Por que parado?");
   const idxLastActivity = header.indexOf("Data da última atividade");
   const idxRiskFactor = header.indexOf("Fator de risco");
+  const idxDescription = header.findIndex((label) => normalizeLabel(label) === "descricao");
   const idxPortfolioClass = header.indexOf("Classificação da carteira");
   const idxProjectClassification = header.indexOf("Classificação do projeto");
   const idxAmountPaid = header.indexOf("Valor pago");
@@ -157,6 +158,7 @@ function parseOpenProjectsMatrix(matrix: Matrix): ExecutiveOpenProjectRow[] {
       amountPaid: parseNumeric(row[idxAmountPaid]),
       contractValue: parseNumeric(row[idxContractValue]),
       riskFactor: asString(row[idxRiskFactor]),
+      description: asString(row[idxDescription]),
       portfolioClass: asString(row[idxPortfolioClass >= 0 ? idxPortfolioClass : idxProjectClassification]),
       finalizationNote: asString(row[47]),
       finalizationAccepted: parseBooleanCell(row[48]),
@@ -366,6 +368,8 @@ function parseDelinquencyProjectsMatrix(matrix: Matrix): ExecutiveDelinquencyRow
       hasB2B: parseBooleanCell(row[indexOf("Tem B2B?")]),
       pendingUsers: parseNumeric(row[indexOf("Usuarios Com Cadastro Pendente")]),
       vendorUsers: parseNumeric(row[indexOf("Usuarios Vendedores")]),
+      engagementOrdersPercent: parseNullablePercentage(row[indexOf("Perc Vendedores Emitindo 5 Pedidos Ou Mais Ult 3 Meses")]),
+      engagementOrdersQuotesPercent: parseNullablePercentage(row[indexOf("Perc Vendedores Emitindo 5 Ou Mais Pedidos Ou Orcamentos Ult 3 Meses")]),
       engagementLabel: asString(row[indexOf("Faixa Engajamento Vendedores Emitindo 5 Pedidos Ou Mais Ult 3 Meses")]),
       detailUrl: asString(row[indexOf("Detalhar Cliente")]),
     });
@@ -506,6 +510,13 @@ function parseNumeric(value: string | number | boolean | Date | null | undefined
 }
 
 function parseNullableNumeric(value: string | number | boolean | Date | null | undefined): number | null {
+  if (value === null || value === undefined || asString(value) === "") {
+    return null;
+  }
+  return parseNumeric(value);
+}
+
+function parseNullablePercentage(value: string | number | boolean | Date | null | undefined): number | null {
   if (value === null || value === undefined || asString(value) === "") {
     return null;
   }

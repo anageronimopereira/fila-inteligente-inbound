@@ -39,6 +39,8 @@ const OPERATIONAL_STATUS_OPTIONS = [
   "Em andamento",
 ];
 
+const MEETING_NOTES_STORAGE_KEY = "mercos-ops-meeting-notes-v1";
+
 export function FunnelPanel({
   executiveData,
   implanters,
@@ -63,6 +65,9 @@ export function FunnelPanel({
   const [selectedClientKey, setSelectedClientKey] = useState("");
   const [draftOverride, setDraftOverride] = useState<ManualRiskOverride | null>(null);
   const [saveFeedback, setSaveFeedback] = useState("");
+  const [meetingNotes, setMeetingNotes] = useState<Record<string, string>>(() => readMeetingNotes());
+  const [draftMeetingNote, setDraftMeetingNote] = useState("");
+  const [meetingFeedback, setMeetingFeedback] = useState("");
 
   const records = useMemo(() => {
     const baseRecords = buildHealthRecords(executiveData);
@@ -157,6 +162,12 @@ export function FunnelPanel({
   }, [filteredRecords, selectedClientKey]);
 
   const selectedRecord = filteredRecords.find((item) => item.key === selectedClientKey) ?? null;
+  const meetingNotesKey = selectedImplanter || "Todos";
+
+  useEffect(() => {
+    setDraftMeetingNote(meetingNotes[meetingNotesKey] ?? "");
+    setMeetingFeedback("");
+  }, [meetingNotes, meetingNotesKey]);
 
   useEffect(() => {
     if (!selectedRecord) {
@@ -304,6 +315,16 @@ export function FunnelPanel({
     persistOverride(draftOverride);
   }
 
+  function handleSaveMeetingNote() {
+    const nextNotes = {
+      ...meetingNotes,
+      [meetingNotesKey]: draftMeetingNote,
+    };
+    setMeetingNotes(nextNotes);
+    persistMeetingNotes(nextNotes);
+    setMeetingFeedback("Transcrição salva para este implanter.");
+  }
+
   function addRecordToForecast(record: HealthClientRecord) {
     const nextOverride = {
       ...buildOverrideForRecord(record),
@@ -337,6 +358,7 @@ export function FunnelPanel({
       generatedAt: new Date(),
       summary,
       items: itemsByMrr,
+      meetingNote: meetingNotes[meetingNotesKey] ?? "",
     });
     const blob = new Blob([documentHtml], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -565,6 +587,31 @@ export function FunnelPanel({
         </div>
       </section>
 
+      <section style={styles.meetingCard}>
+        <div style={styles.meetingHeader}>
+          <div>
+            <p style={styles.panelEyebrow}>Batida do implanter</p>
+            <h3 style={styles.panelTitle}>Transcrição e orientações da semana</h3>
+          </div>
+          <button type="button" onClick={handleSaveMeetingNote} style={styles.downloadButton}>
+            Salvar transcrição
+          </button>
+        </div>
+        <textarea
+          value={draftMeetingNote}
+          onChange={(event) => setDraftMeetingNote(event.target.value)}
+          placeholder="Cole aqui a transcrição da batida, decisões, combinados e pontos de atenção deste implanter."
+          style={styles.meetingTextarea}
+          rows={6}
+        />
+        <div style={styles.meetingFooter}>
+          <span style={styles.downloadHint}>
+            Esta transcrição fica salva para {selectedImplanter === "Todos" ? "a carteira geral" : selectedImplanter} e entra no relatório baixado.
+          </span>
+          {meetingFeedback ? <strong style={styles.saveFeedback}>{meetingFeedback}</strong> : null}
+        </div>
+      </section>
+
       <div style={styles.metricsGrid}>
         <MetricCard label="Projetos em aberto" value={summary.totalProjects} tone="neutral" />
         <MetricCard label="MRR total da carteira" value={formatCurrencyBRL(summary.totalMrr)} tone="positive" />
@@ -668,6 +715,7 @@ export function FunnelPanel({
                   <th style={styles.th}>Cliente</th>
                   <th style={styles.th}>Implanter</th>
                   <th style={styles.th}>Carteira</th>
+                  <th style={styles.th}>Prioridade</th>
                   <th style={styles.th}>MRR</th>
                   <th style={styles.th}>Forecast</th>
                   <th style={styles.th}>ERP</th>
@@ -696,6 +744,9 @@ export function FunnelPanel({
                     <td style={styles.td}>{item.implanter}</td>
                     <td style={styles.td}>
                       <span style={portfolioPillStyle(item.portfolioClass)}>{item.portfolioClass}</span>
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.priorityScorePill}>{item.priorityScore}</span>
                     </td>
                     <td style={styles.td}>{formatCurrencyBRL(item.mrr)}</td>
                     <td style={styles.td}>
@@ -780,6 +831,8 @@ export function FunnelPanel({
 
               <div style={styles.detailGrid}>
                 <DetailMetric label="MRR" value={formatCurrencyBRL(selectedRecord.mrr)} />
+                <DetailMetric label="Prioridade da fila" value={String(selectedRecord.priorityScore)} />
+                <DetailMetric label="Impacto financeiro" value={String(selectedRecord.priorityImpactScore)} />
                 <DetailMetric label="ERP" value={selectedRecord.erpName} />
                 <DetailMetric label="Status" value={selectedRecord.status} />
                 <DetailMetric
@@ -809,6 +862,12 @@ export function FunnelPanel({
                 <p style={styles.detailText}>Fase: {selectedRecord.phase}</p>
                 <p style={styles.detailText}>
                   Fator de risco: {selectedRecord.riskFactorDescription || "Sem fator sinalizado"}
+                </p>
+                <p style={styles.detailText}>
+                  Por que parado: {selectedRecord.whyStoppedDescription || "Sem motivo preenchido"}
+                </p>
+                <p style={styles.detailText}>
+                  Descrição: {selectedRecord.projectDescription || "Sem descrição preenchida"}
                 </p>
               </div>
 
@@ -1159,6 +1218,40 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "0 20px 40px rgba(83, 40, 125, 0.08)",
   },
   filtersGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" },
+  meetingCard: {
+    background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(240,253,250,0.96) 100%)",
+    border: "1px solid rgba(15, 118, 110, 0.14)",
+    borderRadius: "24px",
+    padding: "22px",
+    boxShadow: "0 20px 40px rgba(15, 118, 110, 0.08)",
+  },
+  meetingHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "16px",
+    marginBottom: "14px",
+    flexWrap: "wrap",
+  },
+  meetingTextarea: {
+    width: "100%",
+    borderRadius: "16px",
+    border: "1px solid rgba(15, 118, 110, 0.18)",
+    padding: "14px 16px",
+    background: "#fff",
+    color: "#0f172a",
+    resize: "vertical",
+    minHeight: "150px",
+    fontFamily: "inherit",
+    lineHeight: 1.55,
+  },
+  meetingFooter: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    marginTop: "10px",
+    flexWrap: "wrap",
+  },
   field: { display: "flex", flexDirection: "column", gap: "8px" },
   checkboxField: {
     display: "flex",
@@ -1312,6 +1405,19 @@ const styles: Record<string, CSSProperties> = {
   priorityReason: { margin: 0, color: "#334155", lineHeight: 1.5, fontWeight: 600 },
   priorityBottom: { display: "flex", gap: "12px", alignItems: "center", justifyContent: "space-between" },
   priorityBadge: { color: "#1d4ed8", fontWeight: 800 },
+  priorityScorePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: "38px",
+    padding: "7px 10px",
+    borderRadius: "999px",
+    background: "#fef3c7",
+    color: "#92400e",
+    border: "1px solid #fde68a",
+    fontSize: "12px",
+    fontWeight: 900,
+  },
   priorityAction: { color: "#475569", fontSize: "13px", lineHeight: 1.5 },
   barList: { display: "flex", flexDirection: "column", gap: "14px" },
   barItem: { display: "flex", flexDirection: "column", gap: "8px" },
@@ -1413,6 +1519,7 @@ const styles: Record<string, CSSProperties> = {
 function buildPriorityDocument(input: {
   implanter: string;
   generatedAt: Date;
+  meetingNote: string;
   summary: {
     totalProjects: number;
     totalMrr: number;
@@ -1630,6 +1737,11 @@ function buildPriorityDocument(input: {
         color: var(--muted);
         line-height: 1.6;
       }
+      .meeting-note {
+        white-space: pre-wrap;
+        line-height: 1.65;
+        color: var(--muted);
+      }
       @media (max-width: 820px) {
         .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .doc-meta { grid-template-columns: 1fr; }
@@ -1685,6 +1797,11 @@ function buildPriorityDocument(input: {
         <div class="card"><span class="card-label">Projetos em atenção</span><strong>${input.summary.attentionCount}</strong></div>
         <div class="card"><span class="card-label">Projetos saudáveis</span><strong>${input.summary.healthyCount}</strong></div>
         <div class="card"><span class="card-label">Projetos carteira A</span><strong>${input.summary.portfolioACount}</strong></div>
+      </section>
+
+      <h2 class="section-title">Orientações registradas na batida</h2>
+      <section class="card meeting-note">
+        ${escapeHtml(input.meetingNote.trim() || "Sem transcrição registrada para este implanter.")}
       </section>
 
       <h2 class="section-title">Top 5 clientes para priorizar</h2>
@@ -1784,6 +1901,28 @@ function formatDateTimeBR(value: Date): string {
     dateStyle: "short",
     timeStyle: "short",
   }).format(value);
+}
+
+function readMeetingNotes(): Record<string, string> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const payload = window.localStorage.getItem(MEETING_NOTES_STORAGE_KEY);
+    if (!payload) {
+      return {};
+    }
+    return JSON.parse(payload) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function persistMeetingNotes(notes: Record<string, string>): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(MEETING_NOTES_STORAGE_KEY, JSON.stringify(notes));
 }
 
 function escapeHtml(value: string): string {

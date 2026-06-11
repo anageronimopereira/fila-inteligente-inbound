@@ -235,6 +235,7 @@ export interface ExecutiveOpenProjectRow {
   amountPaid: number;
   contractValue: number;
   riskFactor: string;
+  description: string;
   portfolioClass: string;
   finalizationNote: string;
   finalizationAccepted: boolean;
@@ -305,6 +306,8 @@ export interface ExecutiveDelinquencyRow {
   hasB2B: boolean;
   pendingUsers: number;
   vendorUsers: number;
+  engagementOrdersPercent: number | null;
+  engagementOrdersQuotesPercent: number | null;
   engagementLabel: string;
   detailUrl: string;
 }

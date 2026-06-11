@@ -20,6 +20,7 @@ import {
 } from "../utils/healthScore";
 
 type DashboardTab = "direcionamento" | "implanter" | "fila" | "forecast";
+type DashboardArea = "risco" | "gestao";
 
 const DEFAULT_IMPLANTERS = [
   "Aline Andrade",
@@ -59,7 +60,8 @@ const preloadedDashboard = readPreloadedDashboardState();
 const LOCAL_OVERRIDE_STORAGE_KEY = "mercos-ops-manual-overrides-v1";
 
 export function Dashboard(): JSX.Element {
-  const [activeTab, setActiveTab] = useState<DashboardTab>("direcionamento");
+  const [activeTab, setActiveTab] = useState<DashboardTab>("fila");
+  const [activeArea, setActiveArea] = useState<DashboardArea>("risco");
   const [selectedImplanter, setSelectedImplanter] = useState("Todos");
   const [selectedSegment, setSelectedSegment] = useState<"Todos" | "MID" | "SMB">("Todos");
   const [executiveOpenProjectsFile, setExecutiveOpenProjectsFile] = useState<File | null>(null);
@@ -411,6 +413,16 @@ export function Dashboard(): JSX.Element {
     });
   }
 
+  function handleAreaChange(area: DashboardArea) {
+    setActiveArea(area);
+    setActiveTab(area === "risco" ? "fila" : "direcionamento");
+  }
+
+  function handleTabChange(tab: DashboardTab) {
+    setActiveTab(tab);
+    setActiveArea(tab === "fila" || tab === "implanter" ? "risco" : "gestao");
+  }
+
   return (
     <section style={styles.page}>
       <header style={styles.hero}>
@@ -430,26 +442,44 @@ export function Dashboard(): JSX.Element {
           </p>
         </div>
       </header>
+      <section style={styles.workspaceSwitcher}>
+        <AreaButton
+          title="Risco do cliente"
+          description="Fila inteligente, Health Score, sinais de risco e relatorio da batida."
+          isActive={activeArea === "risco"}
+          onClick={() => handleAreaChange("risco")}
+        />
+        <AreaButton
+          title="Gestao da carteira"
+          description="Direcionamento executivo, forecast e visao consolidada da carteira."
+          isActive={activeArea === "gestao"}
+          onClick={() => handleAreaChange("gestao")}
+        />
+      </section>
       <nav style={styles.tabs} aria-label="Abas do dashboard">
         <TabButton
           label="Direcionamento estratégico da carteira"
+          isVisible={activeArea === "gestao"}
           isActive={activeTab === "direcionamento"}
-          onClick={() => setActiveTab("direcionamento")}
+          onClick={() => handleTabChange("direcionamento")}
         />
         <TabButton
           label="Health Score da carteira"
+          isVisible={activeArea === "risco"}
           isActive={activeTab === "implanter"}
-          onClick={() => setActiveTab("implanter")}
+          onClick={() => handleTabChange("implanter")}
         />
         <TabButton
           label="Fila inteligente de projetos por risco"
+          isVisible={activeArea === "risco"}
           isActive={activeTab === "fila"}
-          onClick={() => setActiveTab("fila")}
+          onClick={() => handleTabChange("fila")}
         />
         <TabButton
           label="Forecast da batida"
+          isVisible={activeArea === "gestao"}
           isActive={activeTab === "forecast"}
-          onClick={() => setActiveTab("forecast")}
+          onClick={() => handleTabChange("forecast")}
         />
       </nav>
 
@@ -803,13 +833,19 @@ function persistManualOverrides(overrides: Record<string, ManualRiskOverride>): 
 
 function TabButton({
   label,
+  isVisible = true,
   isActive,
   onClick,
 }: {
   label: string;
+  isVisible?: boolean;
   isActive: boolean;
   onClick: () => void;
-}): JSX.Element {
+}): JSX.Element | null {
+  if (!isVisible) {
+    return null;
+  }
+
   return (
     <button
       type="button"
@@ -820,6 +856,32 @@ function TabButton({
       }}
     >
       {label}
+    </button>
+  );
+}
+
+function AreaButton({
+  title,
+  description,
+  isActive,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  isActive: boolean;
+  onClick: () => void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...styles.areaButton,
+        ...(isActive ? styles.areaButtonActive : null),
+      }}
+    >
+      <strong style={styles.areaButtonTitle}>{title}</strong>
+      <span style={styles.areaButtonText}>{description}</span>
     </button>
   );
 }
@@ -1065,6 +1127,42 @@ const styles: Record<string, CSSProperties> = {
     flexWrap: "wrap",
     gap: "10px",
     marginBottom: "20px",
+  },
+  workspaceSwitcher: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: "14px",
+    marginBottom: "14px",
+  },
+  areaButton: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: "8px",
+    padding: "20px",
+    borderRadius: "22px",
+    border: "1px solid rgba(106, 63, 150, 0.14)",
+    background: "rgba(255,255,255,0.9)",
+    color: "#0f172a",
+    cursor: "pointer",
+    textAlign: "left",
+    boxShadow: "0 16px 30px rgba(83, 40, 125, 0.08)",
+  },
+  areaButtonActive: {
+    borderColor: "rgba(13, 204, 104, 0.48)",
+    background: "linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)",
+    boxShadow: "0 18px 36px rgba(13, 204, 104, 0.14)",
+  },
+  areaButtonTitle: {
+    color: "#4c1d95",
+    fontSize: "18px",
+    fontWeight: 900,
+  },
+  areaButtonText: {
+    color: "#64748b",
+    fontSize: "13px",
+    lineHeight: 1.5,
+    fontWeight: 600,
   },
   tabButton: {
     borderRadius: "999px",

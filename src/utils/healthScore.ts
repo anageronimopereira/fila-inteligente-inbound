@@ -12,9 +12,9 @@ import type {
 
 export type HealthClassification = "Saudável" | "Atenção" | "Risco";
 
-const PORTFOLIO_A_MIN_MRR = 4799.64;
-const PORTFOLIO_B_MIN_MRR = 2264.8;
-const PORTFOLIO_C_MIN_MRR = 1105.4;
+const PORTFOLIO_A_MIN_MRR = 6000;
+const PORTFOLIO_B_MIN_MRR = 2500;
+const PORTFOLIO_C_MIN_MRR = 530;
 
 export interface HealthClientRecord {
   key: string;
@@ -30,6 +30,8 @@ export interface HealthClientRecord {
   ageDays: number;
   mrr: number;
   healthScore: number;
+  priorityScore: number;
+  priorityImpactScore: number;
   classification: HealthClassification;
   engagementScore: number;
   progressScore: number;
@@ -38,6 +40,8 @@ export interface HealthClientRecord {
   engagementApplicable: boolean;
   engagementSummary: string;
   riskFactorDescription: string;
+  whyStoppedDescription: string;
+  projectDescription: string;
   executiveRiskLabel: "Parado" | "Em risco" | "Necessita de ação" | "Com problemas" | null;
   hasExecutiveRisk: boolean;
   riskSignals: string[];
@@ -179,14 +183,26 @@ export function buildHealthRecords(executiveData: ExecutiveUploadsData | null): 
         ageDays,
         status,
         hasOverdueSubscription: delinquencyRow?.hasOverdueSubscription ?? false,
-        hasRiskFactor: Boolean(openRow?.riskFactor.trim()),
+        hasRiskFactor: hasProjectTextRisk(openRow),
       });
       const classification = classifyOperationalHealth({
         score: healthScore,
         status,
         riskFactor: openRow?.riskFactor ?? "",
+        whyStopped: openRow?.whyStopped ?? "",
+        description: openRow?.description ?? "",
       });
       const recommendedAction = getRecommendedAction(healthScore);
+      const priorityImpactScore = calculatePriorityImpactScore(mrr, portfolioClass);
+      const priorityScore = calculatePriorityScore({
+        healthScore,
+        classification,
+        impactScore: priorityImpactScore,
+        hasCancellationOpportunity: cancellationRows.length > 0,
+        hasOverdueSubscription: delinquencyRow?.hasOverdueSubscription ?? false,
+        executiveRiskLabel,
+        ageDays,
+      });
       const priorityReason = buildPriorityReason({
         portfolioClass,
         classification,
@@ -210,6 +226,8 @@ export function buildHealthRecords(executiveData: ExecutiveUploadsData | null): 
         ageDays,
         mrr,
         healthScore,
+        priorityScore,
+        priorityImpactScore,
         classification,
         engagementScore: engagement.score,
         progressScore,
@@ -218,6 +236,8 @@ export function buildHealthRecords(executiveData: ExecutiveUploadsData | null): 
         engagementApplicable,
         engagementSummary: engagementApplicable ? engagement.summary : "N/A antes do go-live",
         riskFactorDescription: openRow?.riskFactor.trim() || "",
+        whyStoppedDescription: openRow?.whyStopped.trim() || "",
+        projectDescription: openRow?.description.trim() || "",
         executiveRiskLabel,
         hasExecutiveRisk: executiveRiskLabel !== null,
         riskSignals: riskEvaluation.signals,
@@ -282,11 +302,17 @@ export function applyOperationalContext(
           override?.note ||
           override?.nextStep,
       );
+      const priorityScore = adjustPriorityForManualClassification(
+        record.priorityScore,
+        effectiveClassification,
+        record.classification,
+      );
 
       return {
         ...record,
         classification: effectiveClassification,
         effectiveClassification,
+        priorityScore,
         manualClassification,
         forecastMovement,
         manualOperationalStatus,
@@ -302,9 +328,7 @@ export function applyOperationalContext(
 }
 
 export function comparePriority(a: HealthClientRecord, b: HealthClientRecord): number {
-  const portfolioDelta = portfolioWeight(a.portfolioClass) - portfolioWeight(b.portfolioClass);
-  if (portfolioDelta !== 0) return portfolioDelta;
-  if (a.healthScore !== b.healthScore) return a.healthScore - b.healthScore;
+  if (a.priorityScore !== b.priorityScore) return b.priorityScore - a.priorityScore;
   if (a.hasCancellationOpportunity !== b.hasCancellationOpportunity) {
     return a.hasCancellationOpportunity ? -1 : 1;
   }
@@ -346,6 +370,18 @@ export function formatDateBR(value: Date | null): string {
 
 function calculateEngagementScore(row: ExecutiveDelinquencyRow | null): { score: number; summary: string } {
   if (!row) return { score: 15, summary: "Sem informação" };
+
+  const observedPercent = Math.max(
+    row.engagementOrdersPercent ?? -1,
+    row.engagementOrdersQuotesPercent ?? -1,
+  );
+  if (observedPercent >= 0) {
+    if (observedPercent >= 100) return { score: 95, summary: "Alto" };
+    if (observedPercent >= 80) return { score: 88, summary: "Alto" };
+    if (observedPercent >= 60) return { score: 72, summary: "MÃ©dio" };
+    if (observedPercent >= 20) return { score: 42, summary: "Baixo" };
+    return { score: 12, summary: "Sem uso" };
+  }
 
   const normalizedLabel = normalize(row.engagementLabel);
   const percent = extractPercentage(row.engagementLabel);
@@ -390,16 +426,15 @@ function calculateOverallHealthScore(input: {
 
   if (!input.engagementApplicable) {
     const reweightedScore =
-      (input.progressScore * 0.25 + input.riskScore * 0.25 + input.strategicScore * 0.2) / 0.7;
+      (input.progressScore * 0.45 + input.riskScore * 0.55);
     const adjustedScore = clampScore(reweightedScore);
     return isEarlyProjectWithoutCriticalSignals ? Math.max(80, adjustedScore) : adjustedScore;
   }
 
   const fullScore = clampScore(
     input.engagementScore * 0.3 +
-      input.progressScore * 0.25 +
-      input.riskScore * 0.25 +
-      input.strategicScore * 0.2,
+      input.progressScore * 0.3 +
+      input.riskScore * 0.4,
   );
   return isEarlyProjectWithoutCriticalSignals ? Math.max(80, fullScore) : fullScore;
 }
@@ -425,10 +460,16 @@ function calculateProgressScore(input: {
 
   if (normalizedStatus.includes("parado")) {
     score = Math.min(score, 28);
+  } else if (normalizedStatus.includes("critico")) {
+    score = Math.min(score, 32);
   } else if (normalizedStatus.includes("necessita")) {
-    score = Math.min(score, 52);
-  } else if (normalizedStatus.includes("risco") || normalizedStatus.includes("critico")) {
+    score = Math.min(score, 48);
+  } else if (normalizedStatus.includes("problemas")) {
+    score = Math.min(score, 42);
+  } else if (normalizedStatus.includes("risco")) {
     score = Math.min(score, 45);
+  } else if (normalizedStatus && !isHealthyProjectStatus(normalizedStatus)) {
+    score = Math.min(score, 58);
   }
 
   const targetDays = isMidImplanter(input.implanter) ? 90 : 60;
@@ -461,19 +502,34 @@ function calculateRiskScore(input: {
     score -= 18;
     signals.push(`Fator de risco: ${input.openRow.riskFactor}`);
   }
+  if (input.openRow?.whyStopped.trim()) {
+    score -= 16;
+    signals.push(`Por que parado: ${input.openRow.whyStopped}`);
+  }
+  const textSignals = detectProjectTextRiskSignals(input.openRow);
+  if (textSignals.length > 0) {
+    score -= Math.min(24, 10 + textSignals.length * 4);
+    signals.push(...textSignals);
+  }
   const normalizedStatus = normalize(input.openRow?.status ?? "");
   if (hasAttentionStatus(normalizedStatus)) {
-    score -= 12;
+    score -= 28;
     signals.push("Projeto parado");
+  } else if (normalizedStatus.includes("critico")) {
+    score -= 30;
+    signals.push("Status critico");
   } else if (normalizedStatus.includes("necessita")) {
-    score -= 18;
+    score -= 22;
     signals.push("Necessita de ação");
   } else if (normalizedStatus.includes("problemas")) {
-    score -= 20;
+    score -= 24;
     signals.push("Projeto com problemas");
   } else if (hasProjectRiskStatus(normalizedStatus)) {
     score -= 22;
     signals.push("Projeto em risco");
+  } else if (normalizedStatus && !isHealthyProjectStatus(normalizedStatus)) {
+    score -= 14;
+    signals.push(`Status exige atencao: ${input.openRow?.status}`);
   }
   const pendingUsers = input.delinquencyRow?.pendingUsers ?? 0;
   if (pendingUsers >= 10) {
@@ -528,6 +584,64 @@ function calculateStrategicScore(input: {
   return clampScore(score);
 }
 
+function calculatePriorityImpactScore(
+  mrr: number,
+  portfolioClass: HealthClientRecord["portfolioClass"],
+): number {
+  if (portfolioClass === "A") return 100;
+  if (portfolioClass === "B") return 78;
+  if (portfolioClass === "C") return 48;
+  if (portfolioClass === "D") return 20;
+  if (mrr > 0) return 12;
+  return 0;
+}
+
+function calculatePriorityScore(input: {
+  healthScore: number;
+  classification: HealthClassification;
+  impactScore: number;
+  hasCancellationOpportunity: boolean;
+  hasOverdueSubscription: boolean;
+  executiveRiskLabel: HealthClientRecord["executiveRiskLabel"];
+  ageDays: number;
+}): number {
+  const operationalRisk = 100 - input.healthScore;
+  const normalizedClassification = normalize(input.classification);
+  const classificationBoost =
+    normalizedClassification === "risco" ? 16 : normalizedClassification === "atencao" ? 8 : 0;
+  const statusBoost = input.executiveRiskLabel ? 10 : 0;
+  const cancellationBoost = input.hasCancellationOpportunity ? 10 : 0;
+  const delinquencyBoost = input.hasOverdueSubscription ? 8 : 0;
+  const ageBoost = input.ageDays > 120 ? 6 : input.ageDays > 90 ? 3 : 0;
+
+  return clampScore(
+    operationalRisk * 0.68 +
+      input.impactScore * 0.32 +
+      classificationBoost +
+      statusBoost +
+      cancellationBoost +
+      delinquencyBoost +
+      ageBoost,
+  );
+}
+
+function adjustPriorityForManualClassification(
+  priorityScore: number,
+  effectiveClassification: HealthClassification,
+  automaticClassification: HealthClassification,
+): number {
+  if (effectiveClassification === automaticClassification) {
+    return priorityScore;
+  }
+  if (effectiveClassification === "Risco") {
+    return clampScore(priorityScore + 18);
+  }
+  if (normalize(effectiveClassification) === "atencao") {
+    return clampScore(priorityScore + 8);
+  }
+  return clampScore(priorityScore - 12);
+}
+
 function inferPortfolioClass(
   openRow: ExecutiveOpenProjectRow | null,
   newRow: ExecutiveNewProjectRow | null,
@@ -569,7 +683,7 @@ function inferPortfolioClassFromMrr(
   if (mrr >= PORTFOLIO_A_MIN_MRR) return "A";
   if (mrr >= PORTFOLIO_B_MIN_MRR) return "B";
   if (mrr >= PORTFOLIO_C_MIN_MRR) return "C";
-  if (mrr >= 0 && Number.isFinite(mrr)) return "D";
+  if (mrr > 0 && Number.isFinite(mrr)) return "D";
   return null;
 }
 
@@ -584,6 +698,9 @@ function buildHistoryNotes(input: {
   const items: string[] = [];
   if (input.latestNew?.createdAt) items.push(`Projeto novo encontrado em ${formatDateBR(input.latestNew.createdAt)}`);
   if (input.openRow?.status) items.push(`Status atual: ${input.openRow.status}`);
+  if (input.openRow?.whyStopped) items.push(`Por que parado: ${input.openRow.whyStopped}`);
+  if (input.openRow?.riskFactor) items.push(`Fator de risco: ${input.openRow.riskFactor}`);
+  if (input.openRow?.description) items.push(`Descricao do projeto: ${input.openRow.description}`);
   if (input.delinquencyRow?.hasOverdueSubscription) items.push("Cliente aparece com inadimplência na base de implantação");
   if (input.cancellationRows.length > 0) items.push(`${input.cancellationRows.length} registro(s) em oportunidade de cancelamento`);
   if (input.closedRows.length > 0) items.push(`${input.closedRows.length} finalização(ões) encontrada(s) na base de notas`);
@@ -622,10 +739,6 @@ function classificationWeight(classification: HealthClassification): number {
   return classification === "Risco" ? 0 : classification === "Atenção" ? 1 : 2;
 }
 
-function portfolioWeight(portfolioClass: HealthClientRecord["portfolioClass"]): number {
-  return portfolioClass === "A" ? 0 : portfolioClass === "B" ? 1 : portfolioClass === "C" ? 2 : portfolioClass === "D" ? 3 : 4;
-}
-
 function classifyHealthScore(score: number): HealthClassification {
   if (score >= 80) return "Saudável";
   if (score >= 50) return "Atenção";
@@ -636,11 +749,16 @@ function classifyOperationalHealth(input: {
   score: number;
   status: string;
   riskFactor: string;
+  whyStopped: string;
+  description: string;
 }): HealthClassification {
   if (
     hasAttentionStatus(input.status) ||
     hasProjectRiskStatus(input.status) ||
-    input.riskFactor.trim().length > 0
+    !isHealthyProjectStatus(input.status) ||
+    input.riskFactor.trim().length > 0 ||
+    input.whyStopped.trim().length > 0 ||
+    detectTextRiskSignals(input.description).length > 0
   ) {
     return "Risco";
   }
@@ -652,13 +770,17 @@ function classifyExecutiveRisk(
 ): "Parado" | "Em risco" | "Necessita de ação" | "Com problemas" | null {
   const normalizedStatus = normalize(openRow?.status ?? "");
   const riskFactor = String(openRow?.riskFactor ?? "").trim();
+  const hasTextRisk = hasProjectTextRisk(openRow);
   if (hasAttentionStatus(normalizedStatus)) {
     return "Parado";
+  }
+  if (isHealthyProjectStatus(normalizedStatus) && !hasTextRisk) {
+    return null;
   }
   if (normalizedStatus === "necessita de acao" || normalizedStatus.includes("necessita de acao")) {
     return "Necessita de ação";
   }
-  if (normalizedStatus.includes("problemas") || riskFactor.length > 0) {
+  if (normalizedStatus.includes("problemas") || riskFactor.length > 0 || hasTextRisk) {
     return "Com problemas";
   }
   if (
@@ -669,11 +791,11 @@ function classifyExecutiveRisk(
   ) {
     return "Em risco";
   }
-  return null;
+  return normalizedStatus ? "Em risco" : null;
 }
 
 function isStoppedOrRiskStatus(status: string): boolean {
-  return hasProjectAnyAlertStatus(status);
+  return hasProjectAnyAlertStatus(status) || !isHealthyProjectStatus(status);
 }
 
 function hasAttentionStatus(status: string): boolean {
@@ -693,6 +815,50 @@ function hasProjectRiskStatus(status: string): boolean {
 
 function hasProjectAnyAlertStatus(status: string): boolean {
   return hasAttentionStatus(status) || hasProjectRiskStatus(status);
+}
+
+function isHealthyProjectStatus(status: string): boolean {
+  return normalize(status) === "em andamento";
+}
+
+function hasProjectTextRisk(openRow: ExecutiveOpenProjectRow | null): boolean {
+  if (!openRow) {
+    return false;
+  }
+  return Boolean(
+    openRow.riskFactor.trim() ||
+      openRow.whyStopped.trim() ||
+      detectProjectTextRiskSignals(openRow).length > 0,
+  );
+}
+
+function detectProjectTextRiskSignals(openRow: ExecutiveOpenProjectRow | null): string[] {
+  if (!openRow) {
+    return [];
+  }
+  return detectTextRiskSignals(`${openRow.description} ${openRow.whyStopped} ${openRow.riskFactor}`);
+}
+
+function detectTextRiskSignals(value: string): string[] {
+  const normalized = normalize(value);
+  if (!normalized) {
+    return [];
+  }
+
+  const categories: Array<[string, RegExp]> = [
+    ["Cliente sem retorno", /\b(sem retorno|nao responde|aguardando cliente|retorno do cliente)\b/],
+    ["Problema financeiro", /\b(financeir|inadimpl|pagamento|mensalidade|boleto|cobranca)\b/],
+    ["Troca de ERP", /\b(troca de erp|mudanca de erp|erp)\b/],
+    ["Integracao com problema", /\b(integracao|api|bling|tiny|webmais|mercos|sincron)\b/],
+    ["Parceiro ou alinhamento externo", /\b(parceiro|contador|consultor|terceiro|alinhamento)\b/],
+    ["Baixo engajamento", /\b(engaj|sem uso|nao usa|usuarios pendentes|treinamento pendente)\b/],
+    ["Escopo fora do padrao", /\b(fora do padrao|custom|personaliz|escopo)\b/],
+    ["Bloqueio interno", /\b(bloqueio interno|produto|suporte|dev|desenvolvimento|bug)\b/],
+  ];
+
+  return categories
+    .filter(([, pattern]) => pattern.test(normalized))
+    .map(([label]) => label);
 }
 
 function getRecommendedAction(score: number): string {
