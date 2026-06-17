@@ -1,4 +1,4 @@
-import { ChangeEvent, CSSProperties, useEffect, useMemo, useState } from "react";
+﻿import { ChangeEvent, CSSProperties, useEffect, useMemo, useState } from "react";
 
 import type {
   ExecutiveUploadsData,
@@ -8,6 +8,8 @@ import { ExecutiveOverview } from "./ExecutiveOverview";
 import { ForecastPanel } from "./ForecastPanel";
 import { FunnelPanel } from "./FunnelPanel";
 import { HealthScorePanel } from "./HealthScorePanel";
+import { HistoricalDashboard, type HistoricalSnapshot } from "./HistoricalDashboard";
+import { PostConclusionCancellationsPanel } from "./PostConclusionCancellationsPanel";
 import { parseExecutiveFiles } from "../utils/parseExecutiveFiles";
 import {
   readExecutiveFiles,
@@ -19,7 +21,7 @@ import {
   type ManualRiskOverride,
 } from "../utils/healthScore";
 
-type DashboardTab = "direcionamento" | "implanter" | "fila" | "forecast";
+type DashboardTab = "direcionamento" | "implanter" | "fila" | "forecast" | "cancelamentos6m" | "historico";
 type DashboardArea = "risco" | "gestao";
 
 const DEFAULT_IMPLANTERS = [
@@ -44,7 +46,12 @@ interface PreloadedDashboardState {
     | "newProjects"
     | "delinquencyProjects"
     | "contractValueProjects"
-    | "qualitativeProjects",
+    | "qualitativeProjects"
+    | "saasCancellation"
+    | "saasExpansion"
+    | "saasContraction"
+    | "postConclusionClosedProjects"
+    | "postConclusionSaasCancellation",
     string
   >>;
 }
@@ -58,6 +65,7 @@ declare global {
 
 const preloadedDashboard = readPreloadedDashboardState();
 const LOCAL_OVERRIDE_STORAGE_KEY = "mercos-ops-manual-overrides-v1";
+const HISTORICAL_SNAPSHOTS_STORAGE_KEY = "mercos-ops-historical-snapshots-v1";
 
 export function Dashboard(): JSX.Element {
   const [activeTab, setActiveTab] = useState<DashboardTab>("fila");
@@ -71,10 +79,18 @@ export function Dashboard(): JSX.Element {
   const [executiveNewProjectsFile, setExecutiveNewProjectsFile] = useState<File | null>(null);
   const [executiveDelinquencyFile, setExecutiveDelinquencyFile] = useState<File | null>(null);
   const [executiveContractValueFile, setExecutiveContractValueFile] = useState<File | null>(null);
+  const [saasCancellationFile, setSaasCancellationFile] = useState<File | null>(null);
+  const [saasExpansionFile, setSaasExpansionFile] = useState<File | null>(null);
+  const [saasContractionFile, setSaasContractionFile] = useState<File | null>(null);
+  const [postConclusionClosedProjectsFile, setPostConclusionClosedProjectsFile] = useState<File | null>(null);
+  const [postConclusionSaasCancellationFile, setPostConclusionSaasCancellationFile] = useState<File | null>(null);
   const [executiveData, setExecutiveData] = useState<ExecutiveUploadsData | null>(preloadedDashboard.executiveData);
   const [executiveUploadIssues, setExecutiveUploadIssues] = useState<UploadIssue[]>(preloadedDashboard.executiveUploadIssues);
   const [manualOverrides, setManualOverrides] = useState<Record<string, ManualRiskOverride>>(() => readManualOverrides());
+  const [historicalSnapshots, setHistoricalSnapshots] = useState<HistoricalSnapshot[]>(() => readHistoricalSnapshots());
   const [persistedFilesLoaded, setPersistedFilesLoaded] = useState(false);
+  const [isExecutiveUploadsExpanded, setIsExecutiveUploadsExpanded] = useState(false);
+  const [isCancellationUploadExpanded, setIsCancellationUploadExpanded] = useState(false);
 
   const implanters = useMemo(() => {
     const names = new Set<string>(DEFAULT_IMPLANTERS);
@@ -97,13 +113,13 @@ export function Dashboard(): JSX.Element {
       }
     });
 
-    executiveData?.cancellationProjects.forEach((item) => {
+    executiveData?.newProjects.forEach((item) => {
       if (item.implanter) {
         names.add(item.implanter);
       }
     });
 
-    executiveData?.newProjects.forEach((item) => {
+    executiveData?.postConclusionClosedProjects?.forEach((item) => {
       if (item.implanter) {
         names.add(item.implanter);
       }
@@ -154,7 +170,7 @@ export function Dashboard(): JSX.Element {
       cancellationProjects: executiveData.cancellationProjects.filter(
         (item) =>
           matchesImplanter(item.implanter) &&
-          matchesSegment(inferSegmentLabel(item.segment, item.implanter)),
+          matchesSegment(inferSegmentFromImplanter(item.implanter)),
       ),
       newProjects: executiveData.newProjects.filter(
         (item) =>
@@ -168,6 +184,15 @@ export function Dashboard(): JSX.Element {
       ),
       contractValueProjects: executiveData.contractValueProjects,
       qualitativeProjects: [],
+      saasCancellation: executiveData.saasCancellation,
+      saasExpansion: executiveData.saasExpansion,
+      saasContraction: executiveData.saasContraction,
+      postConclusionClosedProjects: (executiveData.postConclusionClosedProjects ?? []).filter(
+        (item) =>
+          matchesImplanter(item.implanter) &&
+          matchesSegment(inferSegmentFromImplanter(item.implanter)),
+      ),
+      postConclusionSaasCancellation: executiveData.postConclusionSaasCancellation ?? [],
     };
   }, [executiveData, selectedImplanter, selectedSegment]);
 
@@ -205,6 +230,11 @@ export function Dashboard(): JSX.Element {
     newProjectsFile?: File | null;
     delinquencyProjectsFile?: File | null;
     contractValueProjectsFile?: File | null;
+    saasCancellationFile?: File | null;
+    saasExpansionFile?: File | null;
+    saasContractionFile?: File | null;
+    postConclusionClosedProjectsFile?: File | null;
+    postConclusionSaasCancellationFile?: File | null;
   }) {
     const result = await parseExecutiveFiles(nextFiles);
     setExecutiveData(result.data);
@@ -228,7 +258,11 @@ export function Dashboard(): JSX.Element {
         setExecutiveNewProjectsFile(files.newProjects ?? null);
         setExecutiveDelinquencyFile(files.delinquencyProjects ?? null);
         setExecutiveContractValueFile(files.contractValueProjects ?? null);
-
+        setSaasCancellationFile(files.saasCancellation ?? null);
+        setSaasExpansionFile(files.saasExpansion ?? null);
+        setSaasContractionFile(files.saasContraction ?? null);
+        setPostConclusionClosedProjectsFile(files.postConclusionClosedProjects ?? null);
+        setPostConclusionSaasCancellationFile(files.postConclusionSaasCancellation ?? null);
         await processExecutiveFiles({
           openProjectsFile: files.openProjects ?? null,
           closedProjectsFile: files.closedProjects ?? null,
@@ -237,6 +271,11 @@ export function Dashboard(): JSX.Element {
           newProjectsFile: files.newProjects ?? null,
           delinquencyProjectsFile: files.delinquencyProjects ?? null,
           contractValueProjectsFile: files.contractValueProjects ?? null,
+          saasCancellationFile: files.saasCancellation ?? null,
+          saasExpansionFile: files.saasExpansion ?? null,
+          saasContractionFile: files.saasContraction ?? null,
+          postConclusionClosedProjectsFile: files.postConclusionClosedProjects ?? null,
+          postConclusionSaasCancellationFile: files.postConclusionSaasCancellation ?? null,
         });
       } catch (error) {
         if (!isMounted) {
@@ -279,6 +318,11 @@ export function Dashboard(): JSX.Element {
       newProjectsFile: executiveNewProjectsFile,
       delinquencyProjectsFile: executiveDelinquencyFile,
       contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
     });
     event.target.value = "";
   }
@@ -295,6 +339,11 @@ export function Dashboard(): JSX.Element {
       newProjectsFile: executiveNewProjectsFile,
       delinquencyProjectsFile: executiveDelinquencyFile,
       contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
     });
     event.target.value = "";
   }
@@ -311,6 +360,11 @@ export function Dashboard(): JSX.Element {
       newProjectsFile: executiveNewProjectsFile,
       delinquencyProjectsFile: executiveDelinquencyFile,
       contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
     });
     event.target.value = "";
   }
@@ -327,6 +381,11 @@ export function Dashboard(): JSX.Element {
       newProjectsFile: executiveNewProjectsFile,
       delinquencyProjectsFile: executiveDelinquencyFile,
       contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
     });
     event.target.value = "";
   }
@@ -343,6 +402,11 @@ export function Dashboard(): JSX.Element {
       newProjectsFile: file,
       delinquencyProjectsFile: executiveDelinquencyFile,
       contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
     });
     event.target.value = "";
   }
@@ -359,6 +423,11 @@ export function Dashboard(): JSX.Element {
       newProjectsFile: executiveNewProjectsFile,
       delinquencyProjectsFile: file,
       contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
     });
     event.target.value = "";
   }
@@ -375,15 +444,25 @@ export function Dashboard(): JSX.Element {
         newProjects: executiveNewProjectsFile?.name,
         delinquencyProjects: executiveDelinquencyFile?.name,
         contractValueProjects: executiveContractValueFile?.name,
+        saasCancellation: saasCancellationFile?.name,
+        saasExpansion: saasExpansionFile?.name,
+        saasContraction: saasContractionFile?.name,
+        postConclusionClosedProjects: postConclusionClosedProjectsFile?.name,
+        postConclusionSaasCancellation: postConclusionSaasCancellationFile?.name,
       },
     };
   }, [
-    executiveCancellationFile,
+    saasCancellationFile,
+    saasContractionFile,
+    saasExpansionFile,
+    postConclusionClosedProjectsFile,
+    postConclusionSaasCancellationFile,
     executiveClosedProjectsFile,
     executiveContractValueFile,
     executiveData,
     executiveDelinquencyFile,
     executiveLostProjectsFile,
+    executiveCancellationFile,
     executiveNewProjectsFile,
     executiveOpenProjectsFile,
     executiveUploadIssues,
@@ -401,6 +480,95 @@ export function Dashboard(): JSX.Element {
       newProjectsFile: executiveNewProjectsFile,
       delinquencyProjectsFile: executiveDelinquencyFile,
       contractValueProjectsFile: file,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
+    });
+    event.target.value = "";
+  }
+
+  async function handleSaasCancellationUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setSaasCancellationFile(file);
+    await saveExecutiveFile("saasCancellation", file);
+    await processExecutiveFiles({
+      openProjectsFile: executiveOpenProjectsFile,
+      closedProjectsFile: executiveClosedProjectsFile,
+      lostProjectsFile: executiveLostProjectsFile,
+      cancellationProjectsFile: executiveCancellationFile,
+      newProjectsFile: executiveNewProjectsFile,
+      delinquencyProjectsFile: executiveDelinquencyFile,
+      contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile: file,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
+    });
+    event.target.value = "";
+  }
+
+  async function handleSaasExpansionUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setSaasExpansionFile(file);
+    await saveExecutiveFile("saasExpansion", file);
+    await processExecutiveFiles({
+      openProjectsFile: executiveOpenProjectsFile,
+      closedProjectsFile: executiveClosedProjectsFile,
+      lostProjectsFile: executiveLostProjectsFile,
+      cancellationProjectsFile: executiveCancellationFile,
+      newProjectsFile: executiveNewProjectsFile,
+      delinquencyProjectsFile: executiveDelinquencyFile,
+      contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile: file,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
+    });
+    event.target.value = "";
+  }
+
+  async function handleSaasContractionUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setSaasContractionFile(file);
+    await saveExecutiveFile("saasContraction", file);
+    await processExecutiveFiles({
+      openProjectsFile: executiveOpenProjectsFile,
+      closedProjectsFile: executiveClosedProjectsFile,
+      lostProjectsFile: executiveLostProjectsFile,
+      cancellationProjectsFile: executiveCancellationFile,
+      newProjectsFile: executiveNewProjectsFile,
+      delinquencyProjectsFile: executiveDelinquencyFile,
+      contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile: file,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile,
+    });
+    event.target.value = "";
+  }
+
+  async function handlePostConclusionSaasCancellationUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setPostConclusionSaasCancellationFile(file);
+    await saveExecutiveFile("postConclusionSaasCancellation", file);
+    await processExecutiveFiles({
+      openProjectsFile: executiveOpenProjectsFile,
+      closedProjectsFile: executiveClosedProjectsFile,
+      lostProjectsFile: executiveLostProjectsFile,
+      cancellationProjectsFile: executiveCancellationFile,
+      newProjectsFile: executiveNewProjectsFile,
+      delinquencyProjectsFile: executiveDelinquencyFile,
+      contractValueProjectsFile: executiveContractValueFile,
+      saasCancellationFile,
+      saasExpansionFile,
+      saasContractionFile,
+      postConclusionClosedProjectsFile,
+      postConclusionSaasCancellationFile: file,
     });
     event.target.value = "";
   }
@@ -411,6 +579,36 @@ export function Dashboard(): JSX.Element {
       persistManualOverrides(next);
       return next;
     });
+  }
+
+  function handleSaveHistoricalSnapshot() {
+    const snapshot = buildHistoricalSnapshot({
+      executiveData: filteredExecutiveData,
+      records: contextualizedRecords,
+      fileNames: {
+        openProjects: executiveOpenProjectsFile?.name ?? preloadedDashboard.fileNames?.openProjects,
+        closedProjects: executiveClosedProjectsFile?.name ?? preloadedDashboard.fileNames?.closedProjects,
+        lostProjects: executiveLostProjectsFile?.name ?? preloadedDashboard.fileNames?.lostProjects,
+        saasCancellation: saasCancellationFile?.name ?? preloadedDashboard.fileNames?.saasCancellation,
+        saasExpansion: saasExpansionFile?.name ?? preloadedDashboard.fileNames?.saasExpansion,
+        saasContraction: saasContractionFile?.name ?? preloadedDashboard.fileNames?.saasContraction,
+      },
+    });
+
+    setHistoricalSnapshots((current) => {
+      const next = [...current, snapshot];
+      persistHistoricalSnapshots(next);
+      return next;
+    });
+  }
+
+  function handleResetHistoricalSnapshots() {
+    const confirmed = window.confirm("Tem certeza que deseja resetar todo o historico salvo?");
+    if (!confirmed) {
+      return;
+    }
+    setHistoricalSnapshots([]);
+    persistHistoricalSnapshots([]);
   }
 
   function handleAreaChange(area: DashboardArea) {
@@ -481,6 +679,12 @@ export function Dashboard(): JSX.Element {
           isActive={activeTab === "forecast"}
           onClick={() => handleTabChange("forecast")}
         />
+        <TabButton
+          label="Cancelamentos até 6 meses"
+          isVisible={activeArea === "gestao"}
+          isActive={activeTab === "cancelamentos6m"}
+          onClick={() => handleTabChange("cancelamentos6m")}
+        />
       </nav>
 
       {activeTab === "direcionamento" ? (
@@ -498,6 +702,13 @@ export function Dashboard(): JSX.Element {
                     : "Carregando planilhas salvas neste navegador..."}
                 </p>
               </div>
+              <button
+                type="button"
+                style={styles.maximizeButton}
+                onClick={() => setIsExecutiveUploadsExpanded((current) => !current)}
+              >
+                {isExecutiveUploadsExpanded ? "Minimizar tabelas" : "Maximizar tabelas"}
+              </button>
               <div style={styles.executiveFilterField}>
                 <label htmlFor="executive-implanter-filter" style={styles.executiveFilterLabel}>
                   Filtrar por implanter
@@ -534,7 +745,8 @@ export function Dashboard(): JSX.Element {
               </div>
             </div>
 
-            <div style={styles.executiveUploadGrid}>
+            {isExecutiveUploadsExpanded ? (
+              <div style={styles.executiveUploadGrid}>
               <label style={styles.executiveUploadSlot}>
                 <input
                   type="file"
@@ -574,6 +786,7 @@ export function Dashboard(): JSX.Element {
                 </span>
               </label>
 
+
               <label style={styles.executiveUploadSlot}>
                 <input
                   type="file"
@@ -586,7 +799,6 @@ export function Dashboard(): JSX.Element {
                   {executiveCancellationFile?.name ?? preloadedDashboard.fileNames?.cancellationProjects ?? "Suba a planilha de oportunidade de cancelamento"}
                 </span>
               </label>
-
               <label style={styles.executiveUploadSlot}>
                 <input
                   type="file"
@@ -626,7 +838,55 @@ export function Dashboard(): JSX.Element {
                 </span>
               </label>
 
-            </div>
+              <label style={styles.executiveUploadSlot}>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleSaasCancellationUpload}
+                  style={styles.hiddenInput}
+                />
+                <span style={styles.executiveUploadSlotTitle}>8. SaaS cancelamento</span>
+                <span style={styles.executiveUploadSlotText}>
+                  {saasCancellationFile?.name ?? preloadedDashboard.fileNames?.saasCancellation ?? "Suba a planilha Valor Cancelled"}
+                </span>
+              </label>
+
+              <label style={styles.executiveUploadSlot}>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleSaasExpansionUpload}
+                  style={styles.hiddenInput}
+                />
+                <span style={styles.executiveUploadSlotTitle}>9. SaaS expansão</span>
+                <span style={styles.executiveUploadSlotText}>
+                  {saasExpansionFile?.name ?? preloadedDashboard.fileNames?.saasExpansion ?? "Suba a planilha Valor Expansion"}
+                </span>
+              </label>
+
+              <label style={styles.executiveUploadSlot}>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleSaasContractionUpload}
+                  style={styles.hiddenInput}
+                />
+                <span style={styles.executiveUploadSlotTitle}>10. SaaS contraction</span>
+                <span style={styles.executiveUploadSlotText}>
+                  {saasContractionFile?.name ?? preloadedDashboard.fileNames?.saasContraction ?? "Suba a planilha Valor Contraction"}
+                </span>
+              </label>
+
+              </div>
+            ) : (
+              <button
+                type="button"
+                style={styles.collapsedUploadButton}
+                onClick={() => setIsExecutiveUploadsExpanded(true)}
+              >
+                Tabelas recolhidas. Clique para maximizar os uploads.
+              </button>
+            )}
           </section>
 
           <ExecutiveOverview
@@ -667,6 +927,66 @@ export function Dashboard(): JSX.Element {
           manualOverrides={manualOverrides}
         />
       ) : null}
+
+      {activeTab === "cancelamentos6m" ? (
+        <>
+          <section style={styles.executiveUploadCard}>
+            <div style={styles.executiveUploadHeader}>
+              <div>
+                <strong style={styles.executiveUploadTitle}>Upload para cancelamentos até 6 meses da 1ª receita</strong>
+                <p style={styles.executiveUploadText}>
+                  Use a planilha SaaS cancelamento dos últimos 6 meses. A aba compara o mês do
+                  cancelamento com a coluna 1a Receita para mostrar quais clientes cancelaram no
+                  início da vida.
+                </p>
+              </div>
+              <button
+                type="button"
+                style={styles.maximizeButton}
+                onClick={() => setIsCancellationUploadExpanded((current) => !current)}
+              >
+                {isCancellationUploadExpanded ? "Minimizar tabelas" : "Maximizar tabelas"}
+              </button>
+            </div>
+            {isCancellationUploadExpanded ? (
+              <div style={styles.executiveUploadGrid}>
+                <label style={styles.executiveUploadSlot}>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handlePostConclusionSaasCancellationUpload}
+                    style={styles.hiddenInput}
+                  />
+                  <span style={styles.executiveUploadSlotTitle}>Cancelamentos 6m</span>
+                  <span style={styles.executiveUploadSlotText}>
+                    {postConclusionSaasCancellationFile?.name ??
+                      preloadedDashboard.fileNames?.postConclusionSaasCancellation ??
+                      "Suba a planilha SaaS cancelamento dos últimos 6 meses"}
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <button
+                type="button"
+                style={styles.collapsedUploadButton}
+                onClick={() => setIsCancellationUploadExpanded(true)}
+              >
+                Tabela recolhida. Clique para maximizar o upload.
+              </button>
+            )}
+          </section>
+          <PostConclusionCancellationsPanel executiveData={filteredExecutiveData} />
+        </>
+      ) : null}
+
+      {activeTab === "historico" ? (
+        <HistoricalDashboard
+          snapshots={historicalSnapshots}
+          canSave={Boolean(filteredExecutiveData)}
+          onSaveSnapshot={handleSaveHistoricalSnapshot}
+          onResetHistory={handleResetHistoricalSnapshots}
+        />
+      ) : null}
     </section>
   );
 }
@@ -694,6 +1014,7 @@ function reviveExecutiveData(data: ExecutiveUploadsData): ExecutiveUploadsData {
     })),
     closedProjects: data.closedProjects.map((item) => ({
       ...item,
+      accountCode: item.accountCode ?? "",
       closedAt: reviveDate(item.closedAt),
     })),
     lostProjects: data.lostProjects.map((item) => ({
@@ -717,6 +1038,31 @@ function reviveExecutiveData(data: ExecutiveUploadsData): ExecutiveUploadsData {
     })),
     contractValueProjects: data.contractValueProjects.map((item) => ({ ...item })),
     qualitativeProjects: [],
+    saasCancellation: (data.saasCancellation ?? []).map((item) => ({
+      ...item,
+      referenceDate: reviveDate(item.referenceDate),
+      firstRevenueAt: reviveDate(item.firstRevenueAt),
+    })),
+    saasExpansion: (data.saasExpansion ?? []).map((item) => ({
+      ...item,
+      referenceDate: reviveDate(item.referenceDate),
+      firstRevenueAt: reviveDate(item.firstRevenueAt),
+    })),
+    saasContraction: (data.saasContraction ?? []).map((item) => ({
+      ...item,
+      referenceDate: reviveDate(item.referenceDate),
+      firstRevenueAt: reviveDate(item.firstRevenueAt),
+    })),
+    postConclusionClosedProjects: (data.postConclusionClosedProjects ?? []).map((item) => ({
+      ...item,
+      accountCode: item.accountCode ?? "",
+      closedAt: reviveDate(item.closedAt),
+    })),
+    postConclusionSaasCancellation: (data.postConclusionSaasCancellation ?? []).map((item) => ({
+      ...item,
+      referenceDate: reviveDate(item.referenceDate),
+      firstRevenueAt: reviveDate(item.firstRevenueAt),
+    })),
   };
 }
 
@@ -774,17 +1120,6 @@ function inferSegmentFromPortfolio(portfolioClass: string, implanter: string): "
   return inferSegmentFromImplanter(implanter);
 }
 
-function inferSegmentLabel(segment: string, implanter: string): "MID" | "SMB" {
-  const normalizedSegment = normalizeText(segment);
-  if (normalizedSegment.includes("mid")) {
-    return "MID";
-  }
-  if (normalizedSegment.includes("smb")) {
-    return "SMB";
-  }
-  return inferSegmentFromImplanter(implanter);
-}
-
 function normalizeText(value: string): string {
   return value
     .normalize("NFD")
@@ -829,6 +1164,77 @@ function persistManualOverrides(overrides: Record<string, ManualRiskOverride>): 
     return;
   }
   window.localStorage.setItem(LOCAL_OVERRIDE_STORAGE_KEY, JSON.stringify(overrides));
+}
+
+function readHistoricalSnapshots(): HistoricalSnapshot[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const payload = window.localStorage.getItem(HISTORICAL_SNAPSHOTS_STORAGE_KEY);
+    if (!payload) {
+      return [];
+    }
+    const parsed = JSON.parse(payload) as HistoricalSnapshot[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistHistoricalSnapshots(snapshots: HistoricalSnapshot[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(HISTORICAL_SNAPSHOTS_STORAGE_KEY, JSON.stringify(snapshots));
+}
+
+function buildHistoricalSnapshot({
+  executiveData,
+  records,
+  fileNames,
+}: {
+  executiveData: ExecutiveUploadsData | null;
+  records: ReturnType<typeof buildHealthRecords>;
+  fileNames: Partial<Record<string, string | undefined>>;
+}): HistoricalSnapshot {
+  const createdAt = new Date().toISOString();
+  const riskRecords = records.filter((record) => record.effectiveClassification !== "Saudável");
+  const midRecords = records.filter((record) => normalizeText(record.segment).includes("mid"));
+  const smbRecords = records.filter((record) => normalizeText(record.segment).includes("smb"));
+  const midHealthy = midRecords.filter((record) => record.effectiveClassification === "Saudável").length;
+  const smbHealthy = smbRecords.filter((record) => record.effectiveClassification === "Saudável").length;
+  const openProjects = executiveData?.openProjects ?? [];
+  const totalMrr = openProjects.reduce((sum, item) => sum + Math.max(item.contractValue, 0), 0);
+  const riskMrr = riskRecords.reduce((sum, record) => sum + Math.max(record.mrr, 0), 0);
+  const implantationCancellationRows = (executiveData?.saasCancellation ?? []).filter((item) => item.isImplantation);
+
+  return {
+    id: `${createdAt}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt,
+    label: new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(createdAt)),
+    fileSummary: Object.entries(fileNames)
+      .filter(([, value]) => Boolean(value))
+      .map(([key, value]) => `${key}: ${value}`),
+    totalProjects: openProjects.length || records.length,
+    totalMrr,
+    healthyRate: records.length > 0 ? Math.round(((records.length - riskRecords.length) / records.length) * 100) : 0,
+    riskProjects: riskRecords.length,
+    riskMrr,
+    midHealthyRate: midRecords.length > 0 ? Math.round((midHealthy / midRecords.length) * 100) : 0,
+    smbHealthyRate: smbRecords.length > 0 ? Math.round((smbHealthy / smbRecords.length) * 100) : 0,
+    midProjects: midRecords.length,
+    smbProjects: smbRecords.length,
+    implantationCancellationCount: implantationCancellationRows.length,
+    implantationCancellationMrr: implantationCancellationRows.reduce((sum, item) => sum + item.value, 0),
+    expansionMrr: (executiveData?.saasExpansion ?? []).reduce((sum, item) => sum + item.value, 0),
+    contractionMrr: (executiveData?.saasContraction ?? []).reduce((sum, item) => sum + item.value, 0),
+  };
 }
 
 function TabButton({
@@ -1075,6 +1481,29 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     lineHeight: 1.45,
   },
+  maximizeButton: {
+    border: "1px solid rgba(106, 63, 150, 0.18)",
+    borderRadius: "999px",
+    background: "linear-gradient(135deg, #ffffff 0%, #f7f3ff 100%)",
+    color: "#56317b",
+    padding: "12px 16px",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 12px 22px rgba(83, 40, 125, 0.08)",
+    whiteSpace: "nowrap",
+  },
+  collapsedUploadButton: {
+    width: "100%",
+    border: "1px dashed rgba(106, 63, 150, 0.28)",
+    borderRadius: "18px",
+    background: "#ffffff",
+    color: "#56317b",
+    padding: "15px 18px",
+    textAlign: "left",
+    fontWeight: 800,
+    cursor: "pointer",
+    boxShadow: "inset 0 1px 2px rgba(15, 23, 42, 0.03)",
+  },
   executiveFilterField: {
     display: "flex",
     flexDirection: "column",
@@ -1209,3 +1638,7 @@ const styles: Record<string, CSSProperties> = {
 };
 
 export default Dashboard;
+
+
+
+

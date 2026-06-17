@@ -439,11 +439,15 @@ function getProjectDurationSeverity(row: ProjectRow): number {
   const targetDays = inferTargetFromRow(row);
   const anchorDate = row.kickOffDate ?? row.createdAt;
 
-  if (!targetDays || !anchorDate) {
+  if (!targetDays) {
     return 0;
   }
 
-  const age = diffDaysFromNow(anchorDate);
+  const age = row.projectDurationDays ?? (anchorDate ? diffDaysFromNow(anchorDate) : 0);
+  if (!age) {
+    return 0;
+  }
+
   if (age <= targetDays) {
     return 0;
   }
@@ -461,7 +465,7 @@ function getProjectDurationSeverity(row: ProjectRow): number {
 function buildProjectDurationLabel(row: ProjectRow): string {
   const targetDays = inferTargetFromRow(row);
   const anchorDate = row.kickOffDate ?? row.createdAt;
-  const age = diffDaysFromNow(anchorDate);
+  const age = row.projectDurationDays ?? diffDaysFromNow(anchorDate);
 
   if (!targetDays) {
     return "Prazo total do projeto sem meta definida";
@@ -857,6 +861,14 @@ function buildCoordinatorManagementAlert(input: {
 }
 
 function inferTargetFromRow(row: ProjectRow): number | null {
+  if (row.plannedProjectDays && row.plannedProjectDays > 0) {
+    return row.plannedProjectDays;
+  }
+
+  if (row.deliveryTargetDays && row.deliveryTargetDays > 0) {
+    return row.deliveryTargetDays;
+  }
+
   const implanter = row.implanter.trim().toLowerCase();
   if (isMidImplanterName(implanter)) {
     return 90;
@@ -899,6 +911,10 @@ function isMidImplanterName(implanter: string): boolean {
 
 function getProjectDelayDays(row: ProjectRow): number {
   const targetDays = inferTargetFromRow(row);
+  if (targetDays && row.projectDurationDays !== null && row.projectDurationDays !== undefined) {
+    return Math.max(0, row.projectDurationDays - targetDays);
+  }
+
   const anchorDate = row.kickOffDate ?? row.createdAt;
 
   if (!targetDays || !anchorDate) {

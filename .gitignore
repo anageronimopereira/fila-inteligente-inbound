@@ -16,6 +16,7 @@ node_modules/
 
 # Build outputs and local artifacts
 dist/
+release/
 outputs/
 
 # Local assistant/workspace state

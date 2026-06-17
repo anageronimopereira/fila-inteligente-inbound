@@ -1,6 +1,6 @@
 import { CSSProperties, useState } from "react";
 
-import type { ExecutiveUploadsData, RankedProject, UploadIssue } from "../types";
+import type { ExecutiveSaasMovementRow, ExecutiveUploadsData, RankedProject, UploadIssue } from "../types";
 import { hasCriticalProjectStatus, hasStoppedProjectStatus } from "../utils/riskScore";
 
 interface ExecutiveOverviewProps {
@@ -85,6 +85,334 @@ export function ExecutiveOverview({
         </section>
       ) : null}
 
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <p style={styles.panelEyebrow}>Visão geral</p>
+          <h3 style={styles.panelTitle}>Visão Geral da Implantação — Parcerias</h3>
+        </div>
+
+        <div style={styles.metricGrid}>
+          <MetricCard label="Projetos ativos" value={summary.totalProjects} detail={summary.totalProjectsSource} tone="neutral" compact />
+          <MetricCard label="MRR total carteira" value={formatCurrencyBRL(summary.totalMrr)} detail={summary.totalMrrSource} tone="positive" compact />
+          <MetricCard label="MRR Mid-market" value={formatCurrencyBRL(summary.midMarket.totalMrr)} detail={`${summary.midMarket.totalProjects} projeto(s)`} tone="neutral" compact />
+          <MetricCard label="Saúde Mid-market" value={`${summary.midMarket.healthyRate}%`} detail={`${summary.midMarket.healthyProjects} saudável(is) • ${summary.midMarket.riskProjects} em risco`} tone={summary.midMarket.healthyRate >= 80 ? "positive" : "warning"} compact />
+          <MetricCard label="MRR SMB" value={formatCurrencyBRL(summary.smb.totalMrr)} detail={`${summary.smb.totalProjects} projeto(s)`} tone="neutral" compact />
+          <MetricCard label="Saúde SMB" value={`${summary.smb.healthyRate}%`} detail={`${summary.smb.healthyProjects} saudável(is) • ${summary.smb.riskProjects} em risco`} tone={summary.smb.healthyRate >= 80 ? "positive" : "warning"} compact />
+          <MetricCard label="Projetos saudáveis" value={`${summary.healthyRate}%`} detail={`${summary.healthyProjects} saudável(is) • ${summary.totalRiskProjects} em risco`} tone={summary.healthyRate >= 80 ? "positive" : "warning"} compact />
+        </div>
+
+        <div style={{ ...styles.sectionGrid, marginTop: "18px" }}>
+          <div style={styles.subPanel}>
+            <strong style={styles.subPanelTitle}>Projetos por implanter</strong>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Implanter</th>
+                    <th style={styles.th}>Proj</th>
+                    <th style={styles.th}>MRR Total</th>
+                    <th style={styles.th}>Em risco</th>
+                    <th style={styles.th}>MRR risco</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.projectsByImplanter.map((row) => (
+                    <tr key={row.implanter} style={styles.tr}>
+                      <td style={styles.td}>{row.implanter}</td>
+                      <td style={styles.td}>{row.totalProjects}</td>
+                      <td style={styles.td}>{formatCurrencyBRL(row.totalMrr)}</td>
+                      <td style={styles.td}>{row.riskProjects}</td>
+                      <td style={styles.td}>{formatCurrencyBRL(row.riskMrr)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={styles.subPanel}>
+            <strong style={styles.subPanelTitle}>Carteiras — risco e saúde</strong>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Cart.</th>
+                    <th style={styles.th}>Total</th>
+                    <th style={styles.th}>MRR Total</th>
+                    <th style={styles.th}>Em risco</th>
+                    <th style={styles.th}>MRR risco</th>
+                    <th style={styles.th}>% risco</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.portfolioBreakdown.map((row) => (
+                    <tr key={row.portfolioClass} style={styles.tr}>
+                      <td style={styles.td}>{row.portfolioClass}</td>
+                      <td style={styles.td}>{row.totalProjects}</td>
+                      <td style={styles.td}>{formatCurrencyBRL(row.totalMrr)}</td>
+                      <td style={styles.td}>{row.riskProjects}</td>
+                      <td style={styles.td}>{formatCurrencyBRL(row.riskMrr)}</td>
+                      <td style={styles.td}>{row.riskRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <p style={styles.panelEyebrow}>Cancelamentos</p>
+          <h3 style={styles.panelTitle}>Cancelamentos — Total e implantação</h3>
+        </div>
+
+        <div style={styles.metricGrid}>
+          <MetricCard label="Cancelamentos implantação" value={summary.totalCancellationProjects} detail="eventos SaaS de Parcerias com Responsável CS implanter" tone="critical" compact />
+          <MetricCard label="MRR cancelamento implantação" value={formatCurrencyBRL(summary.totalCancellationMrr)} detail="soma do Valor Cancelled no Metrics" tone="critical" compact />
+          <MetricCard label="Ticket médio" value={formatCurrencyBRL(summary.averageCancellationTicket)} detail="MRR médio por cancelamento de implantação" tone="warning" compact />
+        </div>
+
+        <div style={{ ...styles.list, marginTop: "18px" }}>
+          <strong style={styles.subPanelTitle}>Clientes cancelados</strong>
+          {summary.topCancellationAccounts.length > 0 ? (
+            summary.topCancellationAccounts.map((item) => (
+              <article key={`${item.companyCode}-${item.contract}-${item.referenceMonth}`} style={styles.listItem}>
+                <div>
+                  <strong style={styles.listTitle}>
+                    {item.companyCode ? `Cliente ${item.companyCode}` : `Contrato ${item.contract}`}
+                  </strong>
+                  <p style={styles.listText}>
+                    1a receita: {formatDateBR(item.firstRevenueAt)} • Implanter: {item.responsibleCs || "Sem responsável"}
+                  </p>
+                </div>
+                <span style={styles.listBadge}>{formatCurrencyBRL(item.value)}</span>
+              </article>
+            ))
+          ) : (
+            <div style={styles.emptyList}>Suba a planilha SaaS cancelamento para listar os cancelamentos da implantação.</div>
+          )}
+        </div>
+      </section>
+
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <p style={styles.panelEyebrow}>Resultados</p>
+          <h3 style={styles.panelTitle}>Projetos Concluídos e Perdidos</h3>
+        </div>
+
+        <div style={styles.metricGrid}>
+          <MetricCard label="Total fechados" value={summary.closedLost.total} detail="concluídos + perdidos" tone="neutral" compact />
+          <MetricCard label="Concluídos" value={summary.closedLost.closed} detail="projetos concluídos com sucesso" tone="positive" compact />
+          <MetricCard label="Perdidos" value={summary.closedLost.lost} detail="perdidos / não concluídos" tone="critical" compact />
+          <MetricCard label="Taxa de sucesso" value={`${summary.closedLost.successRate}%`} detail="concluídos sobre total fechado" tone={summary.closedLost.successRate >= 75 ? "positive" : "warning"} compact />
+        </div>
+
+        <div style={{ ...styles.sectionGrid, marginTop: "18px" }}>
+          <div style={styles.subPanel}>
+            <strong style={styles.subPanelTitle}>Detalhamento por implanter</strong>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={styles.th}>Implanter</th>
+                    <th style={styles.th}>Concluídos</th>
+                    <th style={styles.th}>Perdidos</th>
+                    <th style={styles.th}>Total</th>
+                    <th style={styles.th}>Nota média</th>
+                    <th style={styles.th}>Taxa sucesso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.closedLost.byImplanter.map((row) => (
+                    <tr key={row.implanter} style={styles.tr}>
+                      <td style={styles.td}>{row.implanter}</td>
+                      <td style={styles.td}>{row.closed}</td>
+                      <td style={styles.td}>{row.lost}</td>
+                      <td style={styles.td}>{row.total}</td>
+                      <td style={styles.td}>{row.averageScore !== null ? row.averageScore.toFixed(1) : "-"}</td>
+                      <td style={styles.td}>{row.successRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={styles.subPanel}>
+            <strong style={styles.subPanelTitle}>Voz do cliente na conclusão</strong>
+            <div style={styles.list}>
+              {summary.voiceOfCustomer.length > 0 ? (
+                summary.voiceOfCustomer.map((row) => (
+                  <article key={`${row.clientName}-${row.projectName}`} style={styles.listItem}>
+                    <div>
+                      <strong style={styles.listTitle}>{row.clientName}</strong>
+                      <p style={styles.listText}>{row.implanter || "Sem implanter"} • Cart. {row.portfolioClass || "-"}</p>
+                      <p style={styles.listText}>{row.finalizationNote}</p>
+                    </div>
+                    <span style={styles.listBadge}>{row.finalizationScore ?? "-"}</span>
+                  </article>
+                ))
+              ) : (
+                <div style={styles.emptyList}>Suba a planilha de nota de finalização para ver a voz do cliente.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <p style={styles.panelEyebrow}>Retenção SaaS</p>
+          <h3 style={styles.panelTitle}>MRR total e MRR da implantação</h3>
+        </div>
+
+        <div style={styles.metricGrid}>
+          <MetricCard
+            label="MRR cancelamento total"
+            value={formatCurrencyBRL(summary.saasRetention.cancellation.totalValue)}
+            detail={`${summary.saasRetention.cancellation.totalCount} evento(s) em Parcerias`}
+            tone={summary.saasRetention.cancellation.totalValue > 0 ? "critical" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="MRR cancelamento implantação"
+            value={formatCurrencyBRL(summary.saasRetention.cancellation.implantationValue)}
+            detail={`${summary.saasRetention.cancellation.implantationCount} evento(s) com Responsável CS dos implanters`}
+            tone={summary.saasRetention.cancellation.implantationValue > 0 ? "critical" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="MRR contraction total"
+            value={formatCurrencyBRL(summary.saasRetention.contraction.totalValue)}
+            detail={`${summary.saasRetention.contraction.totalCount} evento(s) em Parcerias`}
+            tone={summary.saasRetention.contraction.totalValue > 0 ? "warning" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="MRR contraction implantação"
+            value={formatCurrencyBRL(summary.saasRetention.contraction.implantationValue)}
+            detail={`${summary.saasRetention.contraction.implantationCount} evento(s) com Responsável CS dos implanters`}
+            tone={summary.saasRetention.contraction.implantationValue > 0 ? "warning" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="MRR expansão total"
+            value={formatCurrencyBRL(summary.saasRetention.expansion.totalValue)}
+            detail={`${summary.saasRetention.expansion.totalCount} evento(s) em Parcerias`}
+            tone={summary.saasRetention.expansion.totalValue > 0 ? "positive" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="MRR expansão implantação"
+            value={formatCurrencyBRL(summary.saasRetention.expansion.implantationValue)}
+            detail={`${summary.saasRetention.expansion.implantationCount} evento(s) com Responsável CS dos implanters`}
+            tone={summary.saasRetention.expansion.implantationValue > 0 ? "positive" : "neutral"}
+            compact
+          />
+        </div>
+
+        <div style={{ ...styles.sectionGrid, marginTop: "18px" }}>
+          <SaasImplantationMovementList
+            title="Cancelamentos da implantação"
+            rows={summary.saasRetention.implantationLists.cancellation}
+            emptyText="Nenhum cancelamento de implantação encontrado."
+            tone="critical"
+          />
+          <SaasImplantationMovementList
+            title="Contractions da implantação"
+            rows={summary.saasRetention.implantationLists.contraction}
+            emptyText="Nenhuma contraction de implantação encontrada."
+            tone="warning"
+          />
+          <SaasImplantationMovementList
+            title="Expansões da implantação"
+            rows={summary.saasRetention.implantationLists.expansion}
+            emptyText="Nenhuma expansão de implantação encontrada."
+            tone="positive"
+          />
+        </div>
+
+      </section>
+
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <p style={styles.panelEyebrow}>Carteiras A e B</p>
+          <h3 style={styles.panelTitle}>Saúde, risco e cancelamentos</h3>
+        </div>
+
+        <div style={styles.metricGrid}>
+          <MetricCard label="Projetos A" value={summary.portfolioA.totalProjects} detail={formatCurrencyBRL(summary.portfolioA.totalMrr)} tone="positive" compact />
+          <MetricCard label="Saúde A" value={`${summary.portfolioA.healthyRate}%`} detail={`${summary.portfolioA.riskProjects} em risco`} tone={summary.portfolioA.healthyRate >= 80 ? "positive" : "warning"} compact />
+          <MetricCard label="Risco A" value={summary.portfolioA.riskProjects} detail={`${formatCurrencyBRL(summary.portfolioA.riskMrr)} em risco`} tone={summary.portfolioA.riskProjects > 0 ? "critical" : "neutral"} compact />
+          <MetricCard label="Projetos B" value={summary.portfolioB.totalProjects} detail={formatCurrencyBRL(summary.portfolioB.totalMrr)} tone="neutral" compact />
+          <MetricCard label="Saúde B" value={`${summary.portfolioB.healthyRate}%`} detail={`${summary.portfolioB.riskProjects} em risco`} tone={summary.portfolioB.healthyRate >= 80 ? "positive" : "warning"} compact />
+          <MetricCard label="Risco B" value={summary.portfolioB.riskProjects} detail={`${formatCurrencyBRL(summary.portfolioB.riskMrr)} em risco`} tone={summary.portfolioB.riskProjects > 0 ? "critical" : "neutral"} compact />
+        </div>
+
+        <div style={{ ...styles.sectionGrid, marginTop: "18px" }}>
+          <div style={styles.subPanel}>
+            <strong style={styles.subPanelTitle}>Clientes A e B em risco</strong>
+            <div style={styles.tableWrap}>
+              {summary.portfolioRiskClients.length > 0 ? (
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.th}>Cliente</th>
+                      <th style={styles.th}>Cart.</th>
+                      <th style={styles.th}>MRR</th>
+                      <th style={styles.th}>Status</th>
+                      <th style={styles.th}>Implanter</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.portfolioRiskClients.map((item) => (
+                      <tr key={`${item.clientName}-${item.projectName}`} style={styles.tr}>
+                        <td style={styles.td}>{item.clientName}</td>
+                        <td style={styles.td}>{item.portfolioClass}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(item.mrr)}</td>
+                        <td style={styles.td}>{item.status || "Sem status"}</td>
+                        <td style={styles.td}>{item.implanter || "Sem implanter"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={styles.emptyList}>Nenhum cliente das carteiras A e B em risco.</div>
+              )}
+            </div>
+          </div>
+
+          <div style={styles.subPanel}>
+            <strong style={styles.subPanelTitle}>Clientes acima de R$ 6 mil</strong>
+            <div style={styles.list}>
+              {summary.highMrrClients.length > 0 ? (
+                summary.highMrrClients.map((item) => (
+                  <article key={`${item.clientName}-${item.projectName}`} style={styles.listItem}>
+                    <div>
+                      <strong style={styles.listTitle}>{item.clientName}</strong>
+                      <p style={styles.listText}>
+                        Cart. {item.portfolioClass} • {item.implanter || "Sem implanter"} • {item.status || "Sem status"}
+                      </p>
+                    </div>
+                    <div style={styles.listMeta}>
+                      <span style={item.isRisk ? styles.riskBadge : styles.healthyBadge}>
+                        {item.isRisk ? "Em risco" : "Saudável"}
+                      </span>
+                      <span style={styles.listBadge}>{formatCurrencyBRL(item.mrr)}</span>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div style={styles.emptyList}>Nenhum cliente com MRR acima de R$ 6 mil.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div style={{ display: "none" }}>
       <header style={styles.hero}>
         <div style={styles.heroCopy}>
           <p style={styles.eyebrow}>Dashboard executivo</p>
@@ -176,6 +504,126 @@ export function ExecutiveOverview({
           tone={batidaContext.markedMrr > 0 ? "critical" : "neutral"}
         />
       </div>
+
+      <section style={styles.panel}>
+        <div style={styles.panelHeader}>
+          <p style={styles.panelEyebrow}>Retenção SaaS</p>
+          <h3 style={styles.panelTitle}>Cancelamento, expansão e contraction por implantação</h3>
+        </div>
+
+        <div style={styles.metricGrid}>
+          <MetricCard
+            label="Cancelamento total"
+            value={formatCurrencyBRL(summary.saasRetention.cancellation.totalValue)}
+            detail={`${summary.saasRetention.cancellation.totalCount} evento(s) • implantação ${formatCurrencyBRL(summary.saasRetention.cancellation.implantationValue)}`}
+            tone={summary.saasRetention.cancellation.totalValue > 0 ? "critical" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="Cancelamento implantação"
+            value={formatCurrencyBRL(summary.saasRetention.cancellation.implantationValue)}
+            detail={`${summary.saasRetention.cancellation.implantationCount} evento(s) com Responsável CS dos implanters`}
+            tone={summary.saasRetention.cancellation.implantationValue > 0 ? "critical" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="Expansão total"
+            value={formatCurrencyBRL(summary.saasRetention.expansion.totalValue)}
+            detail={`${summary.saasRetention.expansion.totalCount} evento(s) • implantação ${formatCurrencyBRL(summary.saasRetention.expansion.implantationValue)}`}
+            tone={summary.saasRetention.expansion.totalValue > 0 ? "positive" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="Expansão implantação"
+            value={formatCurrencyBRL(summary.saasRetention.expansion.implantationValue)}
+            detail={`${summary.saasRetention.expansion.implantationCount} evento(s) com Responsável CS dos implanters`}
+            tone={summary.saasRetention.expansion.implantationValue > 0 ? "positive" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="Contraction total"
+            value={formatCurrencyBRL(summary.saasRetention.contraction.totalValue)}
+            detail={`${summary.saasRetention.contraction.totalCount} evento(s) • implantação ${formatCurrencyBRL(summary.saasRetention.contraction.implantationValue)}`}
+            tone={summary.saasRetention.contraction.totalValue > 0 ? "warning" : "neutral"}
+            compact
+          />
+          <MetricCard
+            label="Saldo líquido implantação"
+            value={formatCurrencyBRL(summary.saasRetention.implantationNetMrr)}
+            detail="expansão - contraction - cancelamento dos nomes dos implanters"
+            tone={summary.saasRetention.implantationNetMrr >= 0 ? "positive" : "critical"}
+            compact
+          />
+        </div>
+
+        <div style={{ ...styles.sectionGrid, marginTop: "18px" }}>
+          <div style={styles.subPanel}>
+            <strong style={styles.subPanelTitle}>Movimento por mês</strong>
+            <div style={styles.tableWrap}>
+              {summary.saasRetention.byMonth.length > 0 ? (
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.th}>Mês</th>
+                      <th style={styles.th}>Expansão</th>
+                      <th style={styles.th}>Contraction</th>
+                      <th style={styles.th}>Cancelamento</th>
+                      <th style={styles.th}>Saldo</th>
+                      <th style={styles.th}>Saldo implantação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.saasRetention.byMonth.map((row) => (
+                      <tr key={row.key} style={styles.tr}>
+                        <td style={styles.td}>{row.label}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.expansion)}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.contraction)}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.cancellation)}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.net)}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.implantationNet)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={styles.emptyList}>Suba as três planilhas SaaS para preencher retenção.</div>
+              )}
+            </div>
+          </div>
+
+          <div style={styles.subPanel}>
+            <strong style={styles.subPanelTitle}>Responsável CS da implantação</strong>
+            <div style={styles.tableWrap}>
+              {summary.saasRetention.byResponsible.length > 0 ? (
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.th}>Responsável</th>
+                      <th style={styles.th}>Expansão</th>
+                      <th style={styles.th}>Contraction</th>
+                      <th style={styles.th}>Cancelamento</th>
+                      <th style={styles.th}>Saldo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.saasRetention.byResponsible.map((row) => (
+                      <tr key={row.responsible} style={styles.tr}>
+                        <td style={styles.td}>{row.responsible}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.expansion)}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.contraction)}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.cancellation)}</td>
+                        <td style={styles.td}>{formatCurrencyBRL(row.net)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={styles.emptyList}>Nenhum movimento SaaS com Responsável CS da implantação.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div style={styles.sectionGrid}>
         <section style={styles.panel}>
@@ -302,16 +750,18 @@ export function ExecutiveOverview({
         <div style={styles.list}>
           {summary.topCancellationAccounts.length > 0 ? (
             summary.topCancellationAccounts.map((item) => (
-              <article key={`${item.clientName}-${item.projectName}`} style={styles.listItem}>
+              <article key={`${item.companyCode}-${item.contract}-${item.referenceMonth}`} style={styles.listItem}>
                 <div>
-                  <strong style={styles.listTitle}>{item.clientName}</strong>
+                  <strong style={styles.listTitle}>
+                    {item.companyCode ? `Cliente ${item.companyCode}` : `Contrato ${item.contract}`}
+                  </strong>
                   <p style={styles.listText}>
-                    {item.implanter || "Sem implanter"} • {describeBucket(item.monthsOfLife)}
+                    1a receita: {formatDateBR(item.firstRevenueAt)} • {item.responsibleCs || "Sem responsável"}
                   </p>
                 </div>
                 <div style={styles.listMeta}>
-                  <span style={styles.listBadge}>{formatCurrencyBRL(item.cancellationMrr)}</span>
-                  <span style={styles.listReason}>{item.projectName}</span>
+                  <span style={styles.listBadge}>{formatCurrencyBRL(item.value)}</span>
+                  <span style={styles.listReason}>{item.referenceMonth}</span>
                 </div>
               </article>
             ))
@@ -490,6 +940,7 @@ export function ExecutiveOverview({
           )}
         </div>
       </section>
+      </div>
     </section>
   );
 }
@@ -528,6 +979,48 @@ function buildExecutiveSummary(projects: RankedProject[], executiveData: Executi
   const portfolioBProjects = openProjects.filter((item) => classifyPortfolioClass(item) === "B");
   const portfolioARiskProjects = portfolioAProjects.filter((item) => isExecutiveRiskProject(item));
   const portfolioBRiskProjects = portfolioBProjects.filter((item) => isExecutiveRiskProject(item));
+  const portfolioRiskClients = [...portfolioARiskProjects, ...portfolioBRiskProjects]
+    .map((item) => ({
+      clientName: item.clientName,
+      projectName: item.projectName,
+      implanter: item.implanter,
+      status: item.status,
+      portfolioClass: classifyPortfolioClass(item),
+      mrr: Math.max(item.contractValue, 0),
+    }))
+    .sort((a, b) => b.mrr - a.mrr || a.clientName.localeCompare(b.clientName));
+  const highMrrClients = openProjects
+    .filter((item) => Math.max(item.contractValue, 0) >= 6000)
+    .map((item) => ({
+      clientName: item.clientName,
+      projectName: item.projectName,
+      implanter: item.implanter,
+      status: item.status,
+      portfolioClass: classifyPortfolioClass(item),
+      mrr: Math.max(item.contractValue, 0),
+      isRisk: isExecutiveRiskProject(item),
+    }))
+    .sort((a, b) => b.mrr - a.mrr || a.clientName.localeCompare(b.clientName));
+  const healthyProjects = Math.max(totalProjects - (
+    openProjectsRisk.parado +
+    openProjectsRisk.emRisco +
+    openProjectsRisk.necessitaAcao +
+    openProjectsRisk.comProblemas
+  ), 0);
+  const totalRiskProjects =
+    openProjectsRisk.parado +
+    openProjectsRisk.emRisco +
+    openProjectsRisk.necessitaAcao +
+    openProjectsRisk.comProblemas;
+  const healthyRate = totalProjects > 0 ? Math.round((healthyProjects / totalProjects) * 100) : 0;
+  const midMarketProjects = openProjects.filter((item) => isMidImplanter(item.implanter));
+  const smbProjects = openProjects.filter((item) => !isMidImplanter(item.implanter));
+  const midMarketRiskProjects = midMarketProjects.filter(isExecutiveRiskProject);
+  const smbRiskProjects = smbProjects.filter(isExecutiveRiskProject);
+  const midMarketHealthyProjects = Math.max(midMarketProjects.length - midMarketRiskProjects.length, 0);
+  const smbHealthyProjects = Math.max(smbProjects.length - smbRiskProjects.length, 0);
+  const projectsByImplanter = buildProjectsByImplanter(openProjects);
+  const portfolioBreakdown = buildPortfolioBreakdown(openProjects);
 
   const newProjects = executiveData?.newProjects.length ?? projects.filter((project) => getRankedProjectAgeDays(project) <= 30).length;
   const closedProjects = executiveData?.closedProjects.length ?? projects.filter(isClosedRankedProject).length;
@@ -537,10 +1030,23 @@ function buildExecutiveSummary(projects: RankedProject[], executiveData: Executi
     : projects.filter(isLostRankedProject).reduce((sum, project) => sum + Math.max(project.row.amountPaid ?? 0, 0), 0);
 
   const cancellationProjects = executiveData?.cancellationProjects ?? [];
-  const totalCancellationProjects = cancellationProjects.length;
-  const totalCancellationMrr = cancellationProjects.reduce(
-    (sum, item) => sum + item.cancellationMrr,
+  const implantationCancellationRows = (executiveData?.saasCancellation ?? []).filter(
+    (item) => item.isImplantation,
+  );
+  const totalCancellationProjects = implantationCancellationRows.length;
+  const totalCancellationMrr = implantationCancellationRows.reduce(
+    (sum, item) => sum + item.value,
     0,
+  );
+  const cancellationPhaseGroups = buildCancellationPhaseGroups(cancellationProjects);
+  const saasRetention = buildSaasRetentionSummary(
+    executiveData?.saasCancellation ?? [],
+    executiveData?.saasExpansion ?? [],
+    executiveData?.saasContraction ?? [],
+  );
+  const postConclusionCancellations = buildPostConclusionCancellations(
+    executiveData?.closedProjects ?? [],
+    executiveData?.saasCancellation ?? [],
   );
   const finalizationRows = (executiveData?.closedProjects ?? [])
     .slice()
@@ -575,6 +1081,11 @@ function buildExecutiveSummary(projects: RankedProject[], executiveData: Executi
       average: item.count > 0 ? item.total / item.count : 0,
     }))
     .sort((a, b) => b.average - a.average || b.count - a.count || a.implanter.localeCompare(b.implanter));
+  const closedLost = buildClosedLostSummary(executiveData?.closedProjects ?? [], executiveData?.lostProjects ?? []);
+  const voiceOfCustomer = (executiveData?.closedProjects ?? [])
+    .filter((item) => item.finalizationNote.trim().length > 0 || item.finalizationScore !== null)
+    .sort((a, b) => (b.finalizationScore ?? 0) - (a.finalizationScore ?? 0) || a.clientName.localeCompare(b.clientName))
+    .slice(0, 6);
   const lostByImplanter = (executiveData?.lostProjects ?? [])
     .reduce<Map<string, { implanter: string; count: number; mrr: number }>>((accumulator, item) => {
       const key = item.implanter || "Sem implanter";
@@ -684,11 +1195,27 @@ function buildExecutiveSummary(projects: RankedProject[], executiveData: Executi
     totalMrr,
     totalProjectsSource,
     totalMrrSource,
-    totalRiskProjects:
-      openProjectsRisk.parado +
-      openProjectsRisk.emRisco +
-      openProjectsRisk.necessitaAcao +
-      openProjectsRisk.comProblemas,
+    totalRiskProjects,
+    healthyProjects,
+    healthyRate,
+    midMarket: {
+      totalProjects: midMarketProjects.length,
+      totalMrr: midMarketProjects.reduce((sum, item) => sum + Math.max(item.contractValue, 0), 0),
+      healthyProjects: midMarketHealthyProjects,
+      riskProjects: midMarketRiskProjects.length,
+      healthyRate: midMarketProjects.length > 0 ? Math.round((midMarketHealthyProjects / midMarketProjects.length) * 100) : 0,
+    },
+    smb: {
+      totalProjects: smbProjects.length,
+      totalMrr: smbProjects.reduce((sum, item) => sum + Math.max(item.contractValue, 0), 0),
+      healthyProjects: smbHealthyProjects,
+      riskProjects: smbRiskProjects.length,
+      healthyRate: smbProjects.length > 0 ? Math.round((smbHealthyProjects / smbProjects.length) * 100) : 0,
+    },
+    projectsByImplanter,
+    portfolioBreakdown,
+    portfolioRiskClients,
+    highMrrClients,
     riskBreakdown: openProjectsRisk,
     delayedProjects,
     riskMrr,
@@ -697,12 +1224,14 @@ function buildExecutiveSummary(projects: RankedProject[], executiveData: Executi
       totalMrr: portfolioAProjects.reduce((sum, item) => sum + Math.max(item.contractValue, 0), 0),
       riskProjects: portfolioARiskProjects.length,
       riskMrr: portfolioARiskProjects.reduce((sum, item) => sum + Math.max(item.contractValue, 0), 0),
+      healthyRate: portfolioAProjects.length > 0 ? Math.round(((portfolioAProjects.length - portfolioARiskProjects.length) / portfolioAProjects.length) * 100) : 0,
     },
     portfolioB: {
       totalProjects: portfolioBProjects.length,
       totalMrr: portfolioBProjects.reduce((sum, item) => sum + Math.max(item.contractValue, 0), 0),
       riskProjects: portfolioBRiskProjects.length,
       riskMrr: portfolioBRiskProjects.reduce((sum, item) => sum + Math.max(item.contractValue, 0), 0),
+      healthyRate: portfolioBProjects.length > 0 ? Math.round(((portfolioBProjects.length - portfolioBRiskProjects.length) / portfolioBProjects.length) * 100) : 0,
     },
     delayedSource: executiveData?.openProjects.length
       ? "SLA executivo calculado na planilha de projetos abertos"
@@ -724,11 +1253,15 @@ function buildExecutiveSummary(projects: RankedProject[], executiveData: Executi
     lostMrr,
     totalCancellationProjects,
     totalCancellationMrr,
+    averageCancellationTicket: totalCancellationProjects > 0 ? totalCancellationMrr / totalCancellationProjects : 0,
+    cancellationPhaseGroups,
+    postConclusionCancellations,
+    saasRetention,
     cancellationBuckets,
-    cancellationSource: executiveData?.cancellationProjects.length
-      ? "lido da planilha de oportunidade de cancelamento"
-      : "envie a planilha de cancelamento para preencher esta visão",
-    topCancellationAccounts: cancellationProjects.slice().sort((a, b) => b.cancellationMrr - a.cancellationMrr).slice(0, 6),
+    cancellationSource: (executiveData?.saasCancellation.length ?? 0) > 0
+      ? "lido da planilha SaaS cancelamento do Metrics"
+      : "envie a planilha SaaS cancelamento para preencher esta visão",
+    topCancellationAccounts: implantationCancellationRows.slice().sort((a, b) => b.value - a.value).slice(0, 10),
     cancelledErps: cancelledErpBreakdown.map((item) => item.erp),
     cancelledErpBreakdown,
     cancellationPhaseBreakdown,
@@ -742,6 +1275,8 @@ function buildExecutiveSummary(projects: RankedProject[], executiveData: Executi
       scoreCount: finalizationScores.length,
       byImplanter: finalizationByImplanter,
     },
+    closedLost,
+    voiceOfCustomer,
     lostByImplanter: Array.from(lostByImplanter.values()).sort((a, b) => b.count - a.count || b.mrr - a.mrr),
     delinquency: {
       total: delinquentClients.length,
@@ -751,6 +1286,364 @@ function buildExecutiveSummary(projects: RankedProject[], executiveData: Executi
         : "envie a planilha 6 para preencher a inadimplência",
     },
   };
+}
+
+function buildProjectsByImplanter(openProjects: ExecutiveUploadsData["openProjects"]) {
+  return Array.from(
+    openProjects.reduce<
+      Map<string, { implanter: string; totalProjects: number; totalMrr: number; riskProjects: number; riskMrr: number }>
+    >((accumulator, project) => {
+      const implanter = project.implanter || "Sem implanter";
+      const current = accumulator.get(implanter) ?? {
+        implanter,
+        totalProjects: 0,
+        totalMrr: 0,
+        riskProjects: 0,
+        riskMrr: 0,
+      };
+      const mrr = Math.max(project.contractValue, 0);
+      current.totalProjects += 1;
+      current.totalMrr += mrr;
+      if (isExecutiveRiskProject(project)) {
+        current.riskProjects += 1;
+        current.riskMrr += mrr;
+      }
+      accumulator.set(implanter, current);
+      return accumulator;
+    }, new Map()).values(),
+  ).sort((a, b) => b.riskMrr - a.riskMrr || b.riskProjects - a.riskProjects || a.implanter.localeCompare(b.implanter));
+}
+
+function buildPortfolioBreakdown(openProjects: ExecutiveUploadsData["openProjects"]) {
+  return ["A", "B", "C", "D"].map((portfolioClass) => {
+    const rows = openProjects.filter((project) => classifyPortfolioClass(project) === portfolioClass);
+    const riskRows = rows.filter(isExecutiveRiskProject);
+    const totalMrr = rows.reduce((sum, project) => sum + Math.max(project.contractValue, 0), 0);
+    const riskMrr = riskRows.reduce((sum, project) => sum + Math.max(project.contractValue, 0), 0);
+    return {
+      portfolioClass,
+      totalProjects: rows.length,
+      totalMrr,
+      riskProjects: riskRows.length,
+      riskMrr,
+      riskRate: rows.length > 0 ? Math.round((riskRows.length / rows.length) * 100) : 0,
+    };
+  });
+}
+
+function buildCancellationPhaseGroups(cancellationProjects: ExecutiveUploadsData["cancellationProjects"]) {
+  return cancellationProjects.reduce(
+    (accumulator, project) => {
+      const phase = normalize(project.phase);
+      const target = phase.includes("perdido")
+        ? accumulator.lost
+        : phase.includes("implant")
+          ? accumulator.active
+          : accumulator.portfolio;
+      target.count += 1;
+      target.mrr += project.cancellationMrr;
+      return accumulator;
+    },
+    {
+      active: { count: 0, mrr: 0 },
+      lost: { count: 0, mrr: 0 },
+      portfolio: { count: 0, mrr: 0 },
+    },
+  );
+}
+
+function buildPostConclusionCancellations(
+  closedProjects: ExecutiveUploadsData["closedProjects"],
+  cancellationRows: ExecutiveUploadsData["saasCancellation"],
+) {
+  const closedByKey = new Map<string, ExecutiveUploadsData["closedProjects"]>();
+  closedProjects.forEach((project) => {
+    const keys = [
+      project.accountCode,
+      normalize(project.clientName),
+    ].filter(Boolean);
+    keys.forEach((key) => {
+      const current = closedByKey.get(key) ?? [];
+      current.push(project);
+      closedByKey.set(key, current);
+    });
+  });
+
+  const rows = cancellationRows.reduce<
+    Array<{
+      clientName: string;
+      implanter: string;
+      closedAt: Date | null;
+      cancellationMonth: string;
+      value: number;
+      monthsAfter: number;
+      isImplantation: boolean;
+    }>
+  >((accumulator, cancellation) => {
+    const cancellationDate = cancellation.referenceDate;
+    if (!cancellationDate) {
+      return accumulator;
+    }
+
+    const keys = [
+      cancellation.companyCode,
+      cancellation.contract,
+      normalize(cancellation.contract),
+    ].filter(Boolean);
+    const candidates = keys.flatMap((key) => closedByKey.get(key) ?? []);
+    const matchedProject = candidates
+      .filter((project) => project.closedAt && project.closedAt <= cancellationDate && addMonths(project.closedAt, 6) >= cancellationDate)
+      .sort((a, b) => (b.closedAt?.getTime() ?? 0) - (a.closedAt?.getTime() ?? 0))[0];
+
+    if (!matchedProject?.closedAt) {
+      return accumulator;
+    }
+
+    accumulator.push({
+      clientName: matchedProject.clientName,
+      implanter: matchedProject.implanter,
+      closedAt: matchedProject.closedAt,
+      cancellationMonth: cancellation.referenceMonth,
+      value: cancellation.value,
+      monthsAfter: diffCalendarMonths(matchedProject.closedAt, cancellationDate),
+      isImplantation: cancellation.isImplantation,
+    });
+    return accumulator;
+  }, []);
+
+  const sortedRows = rows.sort((a, b) => b.value - a.value || a.clientName.localeCompare(b.clientName));
+  return {
+    count: rows.length,
+    mrr: rows.reduce((sum, item) => sum + item.value, 0),
+    implantationCount: rows.filter((item) => item.isImplantation).length,
+    implantationMrr: rows.filter((item) => item.isImplantation).reduce((sum, item) => sum + item.value, 0),
+    rows: sortedRows.slice(0, 8),
+  };
+}
+
+function buildClosedLostSummary(
+  closedProjects: ExecutiveUploadsData["closedProjects"],
+  lostProjects: ExecutiveUploadsData["lostProjects"],
+) {
+  const byImplanter = new Map<
+    string,
+    { implanter: string; closed: number; lost: number; total: number; scoreTotal: number; scoreCount: number }
+  >();
+
+  closedProjects.forEach((project) => {
+    const implanter = project.implanter || "Sem implanter";
+    const current = byImplanter.get(implanter) ?? {
+      implanter,
+      closed: 0,
+      lost: 0,
+      total: 0,
+      scoreTotal: 0,
+      scoreCount: 0,
+    };
+    current.closed += 1;
+    current.total += 1;
+    if (project.finalizationScore !== null) {
+      current.scoreTotal += project.finalizationScore;
+      current.scoreCount += 1;
+    }
+    byImplanter.set(implanter, current);
+  });
+
+  lostProjects.forEach((project) => {
+    const implanter = project.implanter || "Sem implanter";
+    const current = byImplanter.get(implanter) ?? {
+      implanter,
+      closed: 0,
+      lost: 0,
+      total: 0,
+      scoreTotal: 0,
+      scoreCount: 0,
+    };
+    current.lost += 1;
+    current.total += 1;
+    byImplanter.set(implanter, current);
+  });
+
+  const closed = closedProjects.length;
+  const lost = lostProjects.length;
+  const total = closed + lost;
+
+  return {
+    closed,
+    lost,
+    total,
+    successRate: total > 0 ? Math.round((closed / total) * 100) : 0,
+    byImplanter: Array.from(byImplanter.values())
+      .map((item) => ({
+        implanter: item.implanter,
+        closed: item.closed,
+        lost: item.lost,
+        total: item.total,
+        averageScore: item.scoreCount > 0 ? item.scoreTotal / item.scoreCount : null,
+        successRate: item.total > 0 ? Math.round((item.closed / item.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total || a.implanter.localeCompare(b.implanter)),
+  };
+}
+
+function buildSaasRetentionSummary(
+  cancellationRows: ExecutiveUploadsData["saasCancellation"],
+  expansionRows: ExecutiveUploadsData["saasExpansion"],
+  contractionRows: ExecutiveUploadsData["saasContraction"],
+) {
+  const cancellation = summarizeSaasMovement(cancellationRows);
+  const expansion = summarizeSaasMovement(expansionRows);
+  const contraction = summarizeSaasMovement(contractionRows);
+  const byMonth = buildSaasMonthlyRows(cancellationRows, expansionRows, contractionRows);
+  const byResponsible = buildSaasResponsibleRows(cancellationRows, expansionRows, contractionRows);
+
+  return {
+    cancellation,
+    expansion,
+    contraction,
+    totalNetMrr: expansion.totalValue - contraction.totalValue - cancellation.totalValue,
+    implantationNetMrr: expansion.implantationValue - contraction.implantationValue - cancellation.implantationValue,
+    baseNetMrr: expansion.baseValue - contraction.baseValue - cancellation.baseValue,
+    byMonth,
+    byResponsible,
+    implantationLists: {
+      cancellation: buildImplantationMovementList(cancellationRows),
+      expansion: buildImplantationMovementList(expansionRows),
+      contraction: buildImplantationMovementList(contractionRows),
+    },
+  };
+}
+
+function buildImplantationMovementList(rows: ExecutiveSaasMovementRow[]) {
+  return rows
+    .filter((row) => row.isImplantation)
+    .sort((a, b) => b.value - a.value || a.responsibleCs.localeCompare(b.responsibleCs))
+    .slice(0, 12);
+}
+
+function summarizeSaasMovement(rows: ExecutiveUploadsData["saasCancellation"]) {
+  const result = rows.reduce(
+    (accumulator, row) => {
+      accumulator.totalCount += 1;
+      accumulator.totalValue += row.value;
+      if (row.isImplantation) {
+        accumulator.implantationCount += 1;
+        accumulator.implantationValue += row.value;
+      } else {
+        accumulator.baseCount += 1;
+        accumulator.baseValue += row.value;
+      }
+      return accumulator;
+    },
+    {
+      totalCount: 0,
+      totalValue: 0,
+      implantationCount: 0,
+      implantationValue: 0,
+      baseCount: 0,
+      baseValue: 0,
+    },
+  );
+  return {
+    ...result,
+    averageTicket: result.totalCount > 0 ? result.totalValue / result.totalCount : 0,
+  };
+}
+
+function buildSaasMonthlyRows(
+  cancellationRows: ExecutiveUploadsData["saasCancellation"],
+  expansionRows: ExecutiveUploadsData["saasExpansion"],
+  contractionRows: ExecutiveUploadsData["saasContraction"],
+) {
+  const monthly = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      timestamp: number;
+      cancellation: number;
+      contraction: number;
+      expansion: number;
+      implantationCancellation: number;
+      implantationContraction: number;
+      implantationExpansion: number;
+    }
+  >();
+
+  const addRows = (
+    rows: ExecutiveUploadsData["saasCancellation"],
+    field: "cancellation" | "contraction" | "expansion",
+    implantationField: "implantationCancellation" | "implantationContraction" | "implantationExpansion",
+  ) => {
+    rows.forEach((row) => {
+      const key = row.referenceDate
+        ? `${row.referenceDate.getFullYear()}-${String(row.referenceDate.getMonth() + 1).padStart(2, "0")}`
+        : row.referenceMonth;
+      const current =
+        monthly.get(key) ?? {
+          key,
+          label: row.referenceMonth || key,
+          timestamp: row.referenceDate?.getTime() ?? 0,
+          cancellation: 0,
+          contraction: 0,
+          expansion: 0,
+          implantationCancellation: 0,
+          implantationContraction: 0,
+          implantationExpansion: 0,
+        };
+      current[field] += row.value;
+      if (row.isImplantation) {
+        current[implantationField] += row.value;
+      }
+      monthly.set(key, current);
+    });
+  };
+
+  addRows(cancellationRows, "cancellation", "implantationCancellation");
+  addRows(expansionRows, "expansion", "implantationExpansion");
+  addRows(contractionRows, "contraction", "implantationContraction");
+
+  return Array.from(monthly.values())
+    .map((row) => ({
+      ...row,
+      net: row.expansion - row.contraction - row.cancellation,
+      implantationNet: row.implantationExpansion - row.implantationContraction - row.implantationCancellation,
+    }))
+    .sort((a, b) => b.timestamp - a.timestamp || b.key.localeCompare(a.key))
+    .slice(0, 12);
+}
+
+function buildSaasResponsibleRows(
+  cancellationRows: ExecutiveUploadsData["saasCancellation"],
+  expansionRows: ExecutiveUploadsData["saasExpansion"],
+  contractionRows: ExecutiveUploadsData["saasContraction"],
+) {
+  const responsible = new Map<string, { responsible: string; cancellation: number; contraction: number; expansion: number }>();
+
+  const addRows = (
+    rows: ExecutiveUploadsData["saasCancellation"],
+    field: "cancellation" | "contraction" | "expansion",
+  ) => {
+    rows
+      .filter((row) => row.isImplantation)
+      .forEach((row) => {
+        const key = row.responsibleCs || "Sem responsável";
+        const current = responsible.get(key) ?? { responsible: key, cancellation: 0, contraction: 0, expansion: 0 };
+        current[field] += row.value;
+        responsible.set(key, current);
+      });
+  };
+
+  addRows(cancellationRows, "cancellation");
+  addRows(expansionRows, "expansion");
+  addRows(contractionRows, "contraction");
+
+  return Array.from(responsible.values())
+    .map((row) => ({
+      ...row,
+      net: row.expansion - row.contraction - row.cancellation,
+    }))
+    .sort((a, b) => Math.abs(b.net) - Math.abs(a.net) || b.cancellation - a.cancellation || a.responsible.localeCompare(b.responsible));
 }
 
 function isExecutiveRiskProject(project: ExecutiveUploadsData["openProjects"][number]): boolean {
@@ -839,6 +1732,9 @@ function classifyOpenProjectRiskBucket(project: ExecutiveUploadsData["openProjec
   const status = normalize(project.status);
   const riskFactor = project.riskFactor.trim();
 
+  if (isDelayedOpenProject(project)) {
+    return "em-risco";
+  }
   if (status === "parado" || status.includes("parado")) {
     return "parado";
   }
@@ -879,12 +1775,18 @@ function classifyRankedProjectRiskBucket(project: RankedProject): RiskBucket {
 }
 
 function isDelayedOpenProject(project: ExecutiveUploadsData["openProjects"][number]): boolean {
-  const target = isMidImplanter(project.implanter) ? 90 : 60;
+  const target = project.plannedProjectDays ?? (isMidImplanter(project.implanter) ? 90 : 60);
+  if (project.projectDurationDays !== null && project.projectDurationDays !== undefined) {
+    return project.projectDurationDays > target;
+  }
   return diffDays(project.kickOffDate) > target;
 }
 
 function isDelayedRankedProject(project: RankedProject): boolean {
-  const target = isMidImplanter(project.row.implanter) ? 90 : 60;
+  const target = project.row.plannedProjectDays ?? project.row.deliveryTargetDays ?? (isMidImplanter(project.row.implanter) ? 90 : 60);
+  if (project.row.projectDurationDays !== null && project.row.projectDurationDays !== undefined) {
+    return project.row.projectDurationDays > target;
+  }
   return getRankedProjectAgeDays(project) > target;
 }
 
@@ -910,19 +1812,19 @@ function diffDays(date: Date | null): number {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
 }
 
+function addMonths(date: Date, months: number): Date {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
+function diffCalendarMonths(start: Date, end: Date): number {
+  return Math.max(0, (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth());
+}
+
 function isMidImplanter(implanter: string): boolean {
   const normalized = normalize(implanter);
   return normalized === "aline andrade" || normalized === "aline santos" || normalized === "maria marcos" || normalized === "maria";
-}
-
-function describeBucket(monthsOfLife: number): string {
-  if (monthsOfLife <= 3) {
-    return "ate 3 meses";
-  }
-  if (monthsOfLife <= 6) {
-    return "ate 6 meses";
-  }
-  return "mais de 6 meses";
 }
 
 function normalize(value?: string): string {
@@ -960,6 +1862,51 @@ function normalizeCancellationPhase(value: string): string {
     return "Acompanhamento";
   }
   return value || "Fase não informada";
+}
+
+function SaasImplantationMovementList({
+  title,
+  rows,
+  emptyText,
+  tone,
+}: {
+  title: string;
+  rows: ExecutiveSaasMovementRow[];
+  emptyText: string;
+  tone: "positive" | "warning" | "critical";
+}): JSX.Element {
+  const badgeStyle =
+    tone === "positive"
+      ? { background: "#dcfce7", color: "#047857", borderColor: "#86efac" }
+      : tone === "warning"
+        ? { background: "#ffedd5", color: "#c2410c", borderColor: "#fdba74" }
+        : { background: "#fee2e2", color: "#b91c1c", borderColor: "#fca5a5" };
+
+  return (
+    <div style={styles.subPanel}>
+      <strong style={styles.subPanelTitle}>{title}</strong>
+      <div style={styles.list}>
+        {rows.length > 0 ? (
+          rows.map((item) => (
+            <article key={`${item.kind}-${item.companyCode}-${item.contract}-${item.referenceMonth}-${item.value}`} style={styles.listItem}>
+              <div>
+                <strong style={styles.listTitle}>
+                  {item.companyCode ? `Cliente ${item.companyCode}` : `Contrato ${item.contract || "-"}`}
+                </strong>
+                <p style={styles.listText}>Implanter: {item.responsibleCs || "Sem responsável"}</p>
+                <p style={styles.listText}>
+                  Contrato: {item.contract || "-"} • Ref.: {item.referenceMonth || "-"} • 1a receita: {formatDateBR(item.firstRevenueAt)}
+                </p>
+              </div>
+              <span style={{ ...styles.listBadge, ...badgeStyle }}>{formatCurrencyBRL(item.value)}</span>
+            </article>
+          ))
+        ) : (
+          <div style={styles.emptyList}>{emptyText}</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function MetricCard({
@@ -1145,6 +2092,34 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     border: "1px solid #86efac",
   },
+  riskBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 11px",
+    borderRadius: "999px",
+    background: "#fff1f2",
+    color: "#be123c",
+    fontWeight: 900,
+    border: "1px solid #fda4af",
+    textTransform: "uppercase",
+    fontSize: "11px",
+    letterSpacing: "0.06em",
+  },
+  healthyBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 11px",
+    borderRadius: "999px",
+    background: "#ecfdf5",
+    color: "#047857",
+    fontWeight: 900,
+    border: "1px solid #86efac",
+    textTransform: "uppercase",
+    fontSize: "11px",
+    letterSpacing: "0.06em",
+  },
   listReason: { color: "#7c2d12", textAlign: "right", lineHeight: 1.4, fontSize: "13px" },
   emptyList: { padding: "18px", borderRadius: "18px", background: "#ffffff", border: "1px dashed rgba(148, 163, 184, 0.3)", color: "#64748b" },
   emptyCard: { padding: "26px", borderRadius: "26px", background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,249,255,0.98) 100%)", border: "1px solid rgba(148, 163, 184, 0.18)" },
@@ -1178,3 +2153,6 @@ const styles: Record<string, CSSProperties> = {
     verticalAlign: "top",
   },
 };
+
+
+

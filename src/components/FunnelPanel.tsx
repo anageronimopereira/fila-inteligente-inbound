@@ -22,6 +22,18 @@ interface FunnelPanelProps {
   onManualOverrideChange: (override: ManualRiskOverride) => void;
 }
 
+declare global {
+  interface Window {
+    filaInteligenteDesktop?: {
+      platform: string;
+      savePriorityPdf?: (
+        html: string,
+        defaultFileName: string,
+      ) => Promise<{ saved: boolean; canceled?: boolean; filePath?: string; error?: string }>;
+    };
+  }
+}
+
 const FORECAST_MOVEMENTS: ForecastMovement[] = [
   "Projeto em risco",
   "Em negociação de cancelamento",
@@ -349,7 +361,7 @@ export function FunnelPanel({
     persistOverride(nextOverride);
   }
 
-  function handleDownloadPriorityDocument() {
+  function buildPriorityDocumentDownload() {
     const itemsByMrr = filteredRecords
       .slice()
       .sort((a, b) => b.mrr - a.mrr || comparePriority(a, b));
@@ -360,22 +372,55 @@ export function FunnelPanel({
       items: itemsByMrr,
       meetingNote: meetingNotes[meetingNotesKey] ?? "",
     });
-    const blob = new Blob([documentHtml], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
     const safeName = (selectedImplanter === "Todos" ? "carteira-geral" : selectedImplanter)
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-zA-Z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .toLowerCase();
+
+    return {
+      documentHtml,
+      safeName,
+      baseFileName: `priorizacao-semanal-${safeName}`,
+    };
+  }
+
+  function handleDownloadPriorityDocument() {
+    const { documentHtml, baseFileName } = buildPriorityDocumentDownload();
+    const blob = new Blob([documentHtml], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
     link.href = url;
-    link.download = `priorizacao-semanal-${safeName}.html`;
+    link.download = `${baseFileName}.html`;
     link.rel = "noopener";
     document.body.appendChild(link);
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function handleDownloadPriorityPdf() {
+    const { documentHtml, baseFileName } = buildPriorityDocumentDownload();
+
+    if (window.filaInteligenteDesktop?.savePriorityPdf) {
+      const result = await window.filaInteligenteDesktop.savePriorityPdf(documentHtml, `${baseFileName}.pdf`);
+      if (result.error) {
+        window.alert(`Não foi possível gerar o PDF: ${result.error}`);
+      }
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      window.alert("Não foi possível abrir a janela de impressão. Libere pop-ups para gerar o PDF.");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(documentHtml);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.setTimeout(() => printWindow.print(), 350);
   }
 
   if (!executiveData || records.length === 0) {
@@ -653,7 +698,10 @@ export function FunnelPanel({
               <h3 style={styles.panelTitle}>Top 5 clientes para atacar agora</h3>
             </div>
             <div style={styles.downloadBox}>
-              <button type="button" onClick={handleDownloadPriorityDocument} style={styles.downloadButton}>
+              <button type="button" onClick={handleDownloadPriorityPdf} style={styles.downloadButton}>
+                Baixar PDF
+              </button>
+              <button type="button" onClick={handleDownloadPriorityDocument} style={styles.secondaryDownloadButton}>
                 Baixar HTML compartilhável
               </button>
               <span style={styles.downloadHint}>
@@ -1362,6 +1410,15 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     cursor: "pointer",
     boxShadow: "0 10px 20px rgba(15, 118, 110, 0.18)",
+  },
+  secondaryDownloadButton: {
+    border: "1px solid rgba(15, 118, 110, 0.22)",
+    borderRadius: "14px",
+    padding: "11px 14px",
+    background: "#ffffff",
+    color: "#0f766e",
+    fontWeight: 800,
+    cursor: "pointer",
   },
   downloadBox: {
     display: "flex",

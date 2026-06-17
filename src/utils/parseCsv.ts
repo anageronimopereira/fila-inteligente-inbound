@@ -305,6 +305,15 @@ function parseOpenProjectsWorkbook(
   const idxAmount = getIndex("Valor pago");
   const idxRisk = getIndex("Fator de risco");
   const idxRiskB2B = getIndex("Fator de Risco do Projeto E-commerce B2B");
+  const idxPlannedProjectDays = findHeaderIndex(header, [
+    "Tempo previsto do projeto",
+    "Tempo previsto de projeto",
+  ]);
+  const idxProjectDurationDays = findHeaderIndex(header, [
+    "Tempo de duração do projeto (dias)",
+    "Tempo de duracao do projeto (dias)",
+    "Tempo de projeto",
+  ]);
   const idxLastActivity = getIndex("Data da última atividade");
 
   if (idxPhase === -1 || idxClient === -1) {
@@ -336,6 +345,10 @@ function parseOpenProjectsWorkbook(
     const workbookRiskB2BLabel = idxRiskB2B >= 0 ? String(sourceRow[idxRiskB2B] ?? "").trim() : "";
     const lastActivityLabel = idxLastActivity >= 0 ? String(sourceRow[idxLastActivity] ?? "").trim() : "";
     const lastActivityAt = lastActivityLabel ? parseFlexibleDate(lastActivityLabel) : null;
+    const plannedProjectDays =
+      idxPlannedProjectDays >= 0 ? parseNullableNumber(String(sourceRow[idxPlannedProjectDays] ?? "")) : null;
+    const projectDurationDays =
+      idxProjectDurationDays >= 0 ? parseNullableNumber(String(sourceRow[idxProjectDurationDays] ?? "")) : null;
 
     rows.push({
       "Data Criacao Projeto Cs": kickOffDate ? formatDateForStorage(kickOffDate) : "",
@@ -375,7 +388,9 @@ function parseOpenProjectsWorkbook(
       projectType,
       projectTypeDetails,
       projectStatus: idxStatus >= 0 ? String(sourceRow[idxStatus] ?? "").trim() : "",
-      deliveryTargetDays: inferDeliveryTargetDays(projectTypeDetails),
+      plannedProjectDays,
+      projectDurationDays,
+      deliveryTargetDays: plannedProjectDays ?? inferDeliveryTargetDays(projectTypeDetails),
       dataSources: ["xlsx"],
     });
   }
@@ -498,7 +513,19 @@ function mapRawRow(
     projectType: "",
     projectTypeDetails: "",
     projectStatus: "",
-    deliveryTargetDays: null,
+    plannedProjectDays: parseFirstNullableNumber([
+      raw["Tempo previsto do projeto"],
+      raw["Tempo previsto de projeto"],
+    ]),
+    projectDurationDays: parseFirstNullableNumber([
+      raw["Tempo de duração do projeto (dias)"],
+      raw["Tempo de projeto"],
+    ]),
+    deliveryTargetDays:
+      parseFirstNullableNumber([
+        raw["Tempo previsto do projeto"],
+        raw["Tempo previsto de projeto"],
+      ]) ?? null,
     dataSources: ["csv"],
     overdueActivitiesCount: 0,
     overdueActivitiesOldestDate: null,
@@ -534,6 +561,8 @@ function mergeProjectRows(primaryRows: ProjectRow[], secondaryRows: ProjectRow[]
       projectType: row.projectType || existing.projectType || "",
       projectTypeDetails: row.projectTypeDetails || existing.projectTypeDetails || "",
       projectStatus: row.projectStatus || existing.projectStatus || "",
+      plannedProjectDays: row.plannedProjectDays ?? existing.plannedProjectDays ?? null,
+      projectDurationDays: row.projectDurationDays ?? existing.projectDurationDays ?? null,
       deliveryTargetDays: row.deliveryTargetDays ?? existing.deliveryTargetDays ?? null,
       engagementOrdersPercent: existing.engagementOrdersPercent || row.engagementOrdersPercent || "",
       engagementOrdersQuotesPercent:
@@ -616,6 +645,38 @@ function parseNumber(value: string): number {
 
   const numeric = Number.parseFloat(normalized);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function parseNullableNumber(value: string | undefined): number | null {
+  if (!value?.trim()) {
+    return null;
+  }
+  const parsed = parseNumber(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseFirstNullableNumber(values: Array<string | undefined>): number | null {
+  for (const value of values) {
+    const parsed = parseNullableNumber(value);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function findHeaderIndex(header: string[], labels: string[]): number {
+  const normalizedLabels = labels.map(normalizeLooseLabel);
+  return header.findIndex((item) => normalizedLabels.includes(normalizeLooseLabel(item)));
+}
+
+function normalizeLooseLabel(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function inferIntegrationCount(value: string): number {

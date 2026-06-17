@@ -8,14 +8,28 @@ import type {
   ExecutiveLostProjectRow,
   ExecutiveNewProjectRow,
   ExecutiveOpenProjectRow,
+  ExecutiveSaasMovementRow,
   ExecutiveUploadsData,
   ExecutiveDelinquencyRow,
   ForecastMovement,
+  SaasMovementKind,
   UploadIssue,
 } from "../types";
 import { parseFlexibleDate } from "./dateUtils";
 
 type Matrix = Array<Array<string | number | boolean | Date | null>>;
+
+const IMPLANTATION_RESPONSIBLE_MATCHES = [
+  "maria",
+  "aline andrade",
+  "aline santos",
+  "david",
+  "caio",
+  "jaqueline",
+  "samara",
+  "natiele",
+  "natieli",
+];
 
 export async function parseExecutiveFiles(files: {
   openProjectsFile?: File | null;
@@ -26,6 +40,11 @@ export async function parseExecutiveFiles(files: {
   delinquencyProjectsFile?: File | null;
   contractValueProjectsFile?: File | null;
   qualitativeProjectsFile?: File | null;
+  saasCancellationFile?: File | null;
+  saasExpansionFile?: File | null;
+  saasContractionFile?: File | null;
+  postConclusionClosedProjectsFile?: File | null;
+  postConclusionSaasCancellationFile?: File | null;
 }): Promise<{ data: ExecutiveUploadsData; issues: UploadIssue[] }> {
   const issues: UploadIssue[] = [];
   const data: ExecutiveUploadsData = {
@@ -37,6 +56,11 @@ export async function parseExecutiveFiles(files: {
     delinquencyProjects: [],
     contractValueProjects: [],
     qualitativeProjects: [],
+    saasCancellation: [],
+    saasExpansion: [],
+    saasContraction: [],
+    postConclusionClosedProjects: [],
+    postConclusionSaasCancellation: [],
   };
 
   const entries: Array<[keyof ExecutiveUploadsData, File | null | undefined]> = [
@@ -48,6 +72,11 @@ export async function parseExecutiveFiles(files: {
     ["delinquencyProjects", files.delinquencyProjectsFile],
     ["contractValueProjects", files.contractValueProjectsFile],
     ["qualitativeProjects", files.qualitativeProjectsFile],
+    ["saasCancellation", files.saasCancellationFile],
+    ["saasExpansion", files.saasExpansionFile],
+    ["saasContraction", files.saasContractionFile],
+    ["postConclusionClosedProjects", files.postConclusionClosedProjectsFile],
+    ["postConclusionSaasCancellation", files.postConclusionSaasCancellationFile],
   ];
 
   for (const [kind, file] of entries) {
@@ -56,6 +85,37 @@ export async function parseExecutiveFiles(files: {
     }
 
     try {
+      if (
+        kind === "saasCancellation" ||
+        kind === "saasExpansion" ||
+        kind === "saasContraction" ||
+        kind === "postConclusionSaasCancellation"
+      ) {
+        data[kind] = parseSaasMovementRows(
+          await file.text(),
+          kind === "saasCancellation" || kind === "postConclusionSaasCancellation"
+            ? "cancelled"
+            : kind === "saasExpansion"
+              ? "expansion"
+              : "contraction",
+        );
+        issues.push({
+          fileName: file.name,
+          message: `${getExecutiveRowsCount(kind, data)} registro(s) lido(s) para retenção SaaS.`,
+          severity: "info",
+        });
+        continue;
+      }
+      if (kind === "cancellationProjects" && file.name.toLowerCase().endsWith(".csv")) {
+        data.cancellationProjects = parseCancellationProjectsMatrix(parseCsvLikeMatrix(await file.text()));
+        issues.push({
+          fileName: file.name,
+          message: `${getExecutiveRowsCount(kind, data)} registro(s) lido(s) para oportunidade de cancelamento.`,
+          severity: "info",
+        });
+        continue;
+      }
+
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const matrix = XLSX.utils.sheet_to_json<(string | number | boolean | Date | null)[]>(sheet, {
@@ -68,6 +128,8 @@ export async function parseExecutiveFiles(files: {
         data.openProjects = parseOpenProjectsMatrix(matrix);
       } else if (kind === "closedProjects") {
         data.closedProjects = parseClosedProjectsMatrix(matrix);
+      } else if (kind === "postConclusionClosedProjects") {
+        data.postConclusionClosedProjects = parseClosedProjectsMatrix(matrix);
       } else if (kind === "lostProjects") {
         data.lostProjects = parseLostProjectsMatrix(matrix);
       } else if (kind === "cancellationProjects") {
@@ -127,6 +189,15 @@ function parseOpenProjectsMatrix(matrix: Matrix): ExecutiveOpenProjectRow[] {
   const idxProjectClassification = header.indexOf("Classificação do projeto");
   const idxAmountPaid = header.indexOf("Valor pago");
   const idxContractValue = header.indexOf("Valor Total do Contrato");
+  const idxPlannedProjectDays = findHeaderIndex(header, [
+    "Tempo previsto do projeto",
+    "Tempo previsto de projeto",
+  ]);
+  const idxProjectDurationDays = findHeaderIndex(header, [
+    "Tempo de duração do projeto (dias)",
+    "Tempo de duracao do projeto (dias)",
+    "Tempo de projeto",
+  ]);
 
   const rows: ExecutiveOpenProjectRow[] = [];
   let currentImplanter = "";
@@ -138,7 +209,8 @@ function parseOpenProjectsMatrix(matrix: Matrix): ExecutiveOpenProjectRow[] {
     }
 
     const projectName = asString(row[idxProject]);
-    const clientName = sanitizeClientName(asString(row[idxClient]));
+    const rawClientName = asString(row[idxClient]);
+    const clientName = sanitizeClientName(rawClientName);
     if (!projectName || !clientName || projectName === "Subtotal") {
       continue;
     }
@@ -155,6 +227,8 @@ function parseOpenProjectsMatrix(matrix: Matrix): ExecutiveOpenProjectRow[] {
       projectTypeDetails: asString(row[idxTypeDetails]),
       whyStopped: asString(row[idxWhyStopped]),
       lastActivityAt: parseExcelDate(row[idxLastActivity]),
+      plannedProjectDays: parseNullableNumeric(row[idxPlannedProjectDays]),
+      projectDurationDays: parseNullableNumeric(row[idxProjectDurationDays]),
       amountPaid: parseNumeric(row[idxAmountPaid]),
       contractValue: parseNumeric(row[idxContractValue]),
       riskFactor: asString(row[idxRiskFactor]),
@@ -182,7 +256,8 @@ function parseContractValueProjectsMatrix(matrix: Matrix): ExecutiveContractValu
   const idxContractValue = header.indexOf("Valor Total do Contrato");
 
   return matrix.slice(headerIndex + 1).reduce<ExecutiveContractValueRow[]>((accumulator, row) => {
-    const clientName = sanitizeClientName(asString(row[idxClient]));
+    const rawClientName = asString(row[idxClient]);
+    const clientName = sanitizeClientName(rawClientName);
     const projectName = asString(row[idxProject]);
     if (!clientName || !projectName) {
       return accumulator;
@@ -213,24 +288,28 @@ function parseClosedProjectsMatrix(matrix: Matrix): ExecutiveClosedProjectRow[] 
   const idxClosedAt = indexOf("Data de fechamento do projeto");
   const idxImplanter = indexOf("Implantador do projeto: Nome completo");
   const idxContractValue = indexOf("Valor Total do Contrato");
+  const idxPortfolioFixed = indexOf("Classificação da carteira");
+  const idxNoteFixed = indexOf("Nota da finalização");
   const idxPortfolio = indexOf("Classificação da carteira");
   const idxNote = indexOf("Nota da finalização");
 
   return matrix.slice(headerIndex + 1).reduce<ExecutiveClosedProjectRow[]>((accumulator, row) => {
-    const clientName = sanitizeClientName(asString(row[idxClient]));
+    const rawClientName = asString(row[idxClient]);
+    const clientName = sanitizeClientName(rawClientName);
     const projectName = asString(row[idxProject]);
     if (!clientName || !projectName) {
       return accumulator;
     }
 
-    const finalizationNote = asString(row[idxNote]);
+    const finalizationNote = asString(row[idxNoteFixed >= 0 ? idxNoteFixed : idxNote]);
     accumulator.push({
+      accountCode: extractLeadingCode(rawClientName),
       clientName,
       projectName,
       closedAt: parseExcelDate(row[idxClosedAt]),
       implanter: asString(row[idxImplanter]),
       contractValue: parseNumeric(row[idxContractValue]),
-      portfolioClass: asString(row[idxPortfolio]),
+      portfolioClass: asString(row[idxPortfolioFixed >= 0 ? idxPortfolioFixed : idxPortfolio]),
       finalizationNote,
       finalizationScore: parseScore(finalizationNote),
     });
@@ -299,9 +378,12 @@ function parseCancellationProjectsMatrix(matrix: Matrix): ExecutiveCancellationP
       segment: asString(row[indexOf("segmento")]),
       implanter: asString(row[indexOf("name")]),
       monthsOfLife: parseNumeric(row[indexOf("meses_de_vida")]),
-      cancellationMrr: Math.abs(parseNumeric(row[indexOf("Valor_Final_c")])),
+      cancellationMrr: Math.abs(parseBrazilianCurrency(row[indexOf("Valor_Final_c")])),
       phase: asString(row[indexOf("fase_c")]),
       projectType: asString(row[indexOf("tipo_de_projeto_c")]),
+      description: [asString(row[indexOf("motivo_da_solicitacao")]), asString(row[indexOf("observacoes_sobre_a_conta")])]
+        .filter(Boolean)
+        .join(" | "),
       closeDate: parseExcelDate(row[indexOf("closedate")]),
       newBusinessDate: parseExcelDate(row[indexOf("data_new_business")]),
     });
@@ -350,7 +432,7 @@ function parseDelinquencyProjectsMatrix(matrix: Matrix): ExecutiveDelinquencyRow
     return [];
   }
 
-  const indexOf = (label: string) => header.indexOf(label);
+  const indexOf = (label: string) => header.findIndex((item) => normalizeLabel(item) === normalizeLabel(label));
 
   return matrix.slice(1).reduce<ExecutiveDelinquencyRow[]>((accumulator, row) => {
     const clientName = sanitizeClientName(asString(row[indexOf("Nome Cliente")]));
@@ -430,6 +512,130 @@ function parseQualitativeProjectsMatrix(matrix: Matrix): ExecutiveQualitativeRow
   }, []);
 }
 
+function parseSaasMovementRows(content: string, kind: SaasMovementKind): ExecutiveSaasMovementRow[] {
+  const matrix = parseCsvLikeMatrix(content);
+  const header = matrix[0]?.map(asString) ?? [];
+  const indexOf = (label: string) => header.findIndex((item) => normalizeLabel(item) === normalizeLabel(label));
+  const valueColumn =
+    kind === "cancelled"
+      ? "Valor Cancelled"
+      : kind === "expansion"
+        ? "Valor Expansion"
+        : "Valor Contraction";
+  const idxReferenceMonth = indexOf("Mês de Referência");
+  const idxContract = indexOf("Contrato");
+  const idxCompanyCode = indexOf("Código da Empresa");
+  const idxSegment = indexOf("Segmento Mercos");
+  const idxSubscriptionModel = indexOf("Modelo de Assinatura");
+  const idxAcquisitionChannel = indexOf("Canal de Aquisição");
+  const idxBilledBy = indexOf("Faturado Por");
+  const idxFirstRevenue = indexOf("1a Receita");
+  const idxResponsibleCs = indexOf("Responsável CS");
+  const idxSeller = indexOf("Vendedor");
+  const idxValue = indexOf(valueColumn);
+  const resolvedIdxReferenceMonth =
+    idxReferenceMonth >= 0 ? idxReferenceMonth : indexOf("Mês de Referência");
+  const resolvedIdxCompanyCode = idxCompanyCode >= 0 ? idxCompanyCode : indexOf("Código da Empresa");
+  const resolvedIdxAcquisitionChannel =
+    idxAcquisitionChannel >= 0 ? idxAcquisitionChannel : indexOf("Canal de Aquisição");
+  const resolvedIdxResponsibleCs = idxResponsibleCs >= 0 ? idxResponsibleCs : indexOf("Responsável CS");
+
+  return matrix.slice(1).reduce<ExecutiveSaasMovementRow[]>((accumulator, row) => {
+    const acquisitionChannel = asString(row[resolvedIdxAcquisitionChannel]);
+    if (normalizeLabel(acquisitionChannel) !== "parcerias") {
+      return accumulator;
+    }
+
+    const responsibleCs = asString(row[resolvedIdxResponsibleCs]);
+    const referenceMonth = asString(row[resolvedIdxReferenceMonth]);
+    const value = parseNumeric(row[idxValue]);
+    if (!referenceMonth || value <= 0) {
+      return accumulator;
+    }
+
+    accumulator.push({
+      kind,
+      referenceMonth,
+      referenceDate: parseReferenceMonth(referenceMonth),
+      contract: asString(row[idxContract]),
+      companyCode: asString(row[resolvedIdxCompanyCode]),
+      segment: asString(row[idxSegment]),
+      subscriptionModel: asString(row[idxSubscriptionModel]),
+      acquisitionChannel,
+      billedBy: asString(row[idxBilledBy]),
+      firstRevenueAt: parseExcelDate(row[idxFirstRevenue]),
+      responsibleCs,
+      seller: asString(row[idxSeller]),
+      value,
+      isImplantation: isImplantationResponsible(responsibleCs),
+    });
+    return accumulator;
+  }, []);
+}
+
+function isImplantationResponsible(value: string): boolean {
+  const normalized = normalizeLabel(value);
+  return IMPLANTATION_RESPONSIBLE_MATCHES.some((name) => normalized.includes(name));
+}
+
+function parseCsvLikeMatrix(content: string): Matrix {
+  const delimiter = detectDelimiter(content);
+  const rows: Matrix = [];
+  let currentRow: Array<string | null> = [];
+  let currentCell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+    const next = content[index + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        currentCell += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === delimiter && !inQuotes) {
+      currentRow.push(currentCell);
+      currentCell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") {
+        index += 1;
+      }
+      currentRow.push(currentCell);
+      if (currentRow.some((cell) => asString(cell).length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentCell = "";
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  currentRow.push(currentCell);
+  if (currentRow.some((cell) => asString(cell).length > 0)) {
+    rows.push(currentRow);
+  }
+
+  return rows;
+}
+
+function detectDelimiter(content: string): string {
+  const firstLine = content.split(/\r?\n/, 1)[0] ?? "";
+  const commaCount = (firstLine.match(/,/g) ?? []).length;
+  const semicolonCount = (firstLine.match(/;/g) ?? []).length;
+  return semicolonCount > commaCount ? ";" : ",";
+}
+
 function getExecutiveRowsCount(kind: keyof ExecutiveUploadsData, data: ExecutiveUploadsData): number {
   return data[kind].length;
 }
@@ -485,6 +691,35 @@ function parseExcelDate(value: string | number | boolean | Date | null | undefin
   return parseFlexibleDate(asString(value));
 }
 
+function parseReferenceMonth(value: string): Date | null {
+  const normalized = normalizeLabel(value);
+  const match = normalized.match(/^([a-z.]+)\s+de\s+(\d{4})$/);
+  if (!match) {
+    return null;
+  }
+
+  const monthMap: Record<string, number> = {
+    "jan.": 0,
+    "fev.": 1,
+    "mar.": 2,
+    "abr.": 3,
+    "mai.": 4,
+    "jun.": 5,
+    "jul.": 6,
+    "ago.": 7,
+    "set.": 8,
+    "out.": 9,
+    "nov.": 10,
+    "dez.": 11,
+  };
+  const month = monthMap[match[1]];
+  const year = Number.parseInt(match[2], 10);
+  if (month === undefined || !Number.isFinite(year)) {
+    return null;
+  }
+  return new Date(year, month, 1);
+}
+
 function parseNumeric(value: string | number | boolean | Date | null | undefined): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : 0;
@@ -507,6 +742,36 @@ function parseNumeric(value: string | number | boolean | Date | null | undefined
 
   const result = Number.parseFloat(normalized);
   return Number.isFinite(result) ? result : 0;
+}
+
+function parseBrazilianCurrency(value: string | number | boolean | Date | null | undefined): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  const cleaned = asString(value).trim().replace(/[^\d,.-]/g, "");
+  if (!cleaned) {
+    return 0;
+  }
+
+  const isNegative = cleaned.includes("-");
+  const unsigned = cleaned.replace(/-/g, "");
+  let normalized = unsigned;
+
+  if (unsigned.includes(",")) {
+    normalized = unsigned.replace(/\./g, "").replace(",", ".");
+  } else {
+    const dotParts = unsigned.split(".");
+    if (dotParts.length > 1 && dotParts.every(Boolean) && dotParts.slice(1).every((part) => part.length === 3)) {
+      normalized = dotParts.join("");
+    }
+  }
+
+  const result = Number.parseFloat(normalized);
+  if (!Number.isFinite(result)) {
+    return 0;
+  }
+  return isNegative ? -result : result;
 }
 
 function parseNullableNumeric(value: string | number | boolean | Date | null | undefined): number | null {
@@ -551,8 +816,17 @@ function hasCell(row: Array<string | number | boolean | Date | null>, label: str
   return row.some((cell) => asString(cell) === label);
 }
 
+function findHeaderIndex(header: string[], labels: string[]): number {
+  const normalizedLabels = labels.map(normalizeLabel);
+  return header.findIndex((item) => normalizedLabels.includes(normalizeLabel(item)));
+}
+
 function sanitizeClientName(value: string): string {
   return value.replace(/^\d+\s*-\s*/, "").trim();
+}
+
+function extractLeadingCode(value: string): string {
+  return value.match(/^\s*(\d+)/)?.[1] ?? "";
 }
 
 function sanitizeCancellationClientName(value: string): string {

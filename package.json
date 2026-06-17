@@ -3,10 +3,15 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "desktop": "npm run build && electron .",
+    "desktop:dev": "set ELECTRON_START_URL=http://127.0.0.1:4173&& electron .",
+    "desktop:unpacked": "npm run build && electron-builder --win --x64 --dir",
+    "desktop:package": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -17,8 +22,32 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
     "playwright": "^1.58.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
+  },
+  "build": {
+    "appId": "br.com.mercos.filainteligente",
+    "productName": "Fila Inteligente",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

@@ -5,7 +5,12 @@ export type ExecutiveFileSlot =
   | "cancellationProjects"
   | "newProjects"
   | "delinquencyProjects"
-  | "contractValueProjects";
+  | "contractValueProjects"
+  | "saasCancellation"
+  | "saasExpansion"
+  | "saasContraction"
+  | "postConclusionClosedProjects"
+  | "postConclusionSaasCancellation";
 
 interface PersistedExecutiveFileRecord {
   slot: ExecutiveFileSlot;

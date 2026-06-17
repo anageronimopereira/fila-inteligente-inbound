@@ -13,6 +13,10 @@ export interface CsvRowRaw {
   "Faixa Engajamento Vendedores Emitindo 5 Pedidos Ou Mais Ult 3 Meses": string;
   "Faixa Engajamento Vendedores Emitindo 5 Ou Mais Pedidos Ou Orcamentos Ult 3 Meses": string;
   "Detalhar Cliente": string;
+  "Tempo previsto do projeto"?: string;
+  "Tempo previsto de projeto"?: string;
+  "Tempo de duração do projeto (dias)"?: string;
+  "Tempo de projeto"?: string;
 }
 
 export interface ProjectRow extends CsvRowRaw {
@@ -41,6 +45,8 @@ export interface ProjectRow extends CsvRowRaw {
   projectType?: string;
   projectTypeDetails?: string;
   projectStatus?: string;
+  plannedProjectDays?: number | null;
+  projectDurationDays?: number | null;
   deliveryTargetDays?: number | null;
   dataSources?: string[];
   overdueActivitiesCount?: number;
@@ -232,6 +238,8 @@ export interface ExecutiveOpenProjectRow {
   projectTypeDetails: string;
   whyStopped: string;
   lastActivityAt: Date | null;
+  plannedProjectDays: number | null;
+  projectDurationDays: number | null;
   amountPaid: number;
   contractValue: number;
   riskFactor: string;
@@ -248,6 +256,7 @@ export interface ExecutiveContractValueRow {
 }
 
 export interface ExecutiveClosedProjectRow {
+  accountCode: string;
   clientName: string;
   projectName: string;
   closedAt: Date | null;
@@ -282,6 +291,7 @@ export interface ExecutiveCancellationProjectRow {
   cancellationMrr: number;
   phase: string;
   projectType: string;
+  description: string;
   closeDate: Date | null;
   newBusinessDate: Date | null;
 }
@@ -336,6 +346,25 @@ export interface ExecutiveQualitativeRow {
   actionStatus: string;
 }
 
+export type SaasMovementKind = "cancelled" | "expansion" | "contraction";
+
+export interface ExecutiveSaasMovementRow {
+  kind: SaasMovementKind;
+  referenceMonth: string;
+  referenceDate: Date | null;
+  contract: string;
+  companyCode: string;
+  segment: string;
+  subscriptionModel: string;
+  acquisitionChannel: string;
+  billedBy: string;
+  firstRevenueAt: Date | null;
+  responsibleCs: string;
+  seller: string;
+  value: number;
+  isImplantation: boolean;
+}
+
 export interface ExecutiveUploadsData {
   openProjects: ExecutiveOpenProjectRow[];
   closedProjects: ExecutiveClosedProjectRow[];
@@ -345,4 +374,9 @@ export interface ExecutiveUploadsData {
   delinquencyProjects: ExecutiveDelinquencyRow[];
   contractValueProjects: ExecutiveContractValueRow[];
   qualitativeProjects: ExecutiveQualitativeRow[];
+  saasCancellation: ExecutiveSaasMovementRow[];
+  saasExpansion: ExecutiveSaasMovementRow[];
+  saasContraction: ExecutiveSaasMovementRow[];
+  postConclusionClosedProjects: ExecutiveClosedProjectRow[];
+  postConclusionSaasCancellation: ExecutiveSaasMovementRow[];
 }
