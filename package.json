@@ -1,5 +1,5 @@
 {
-  "name": "priorizacao-implantacao-dashboard",
+  "name": "fila-inteligente-inbound",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -29,8 +29,8 @@
     "vite": "^5.4.10"
   },
   "build": {
-    "appId": "br.com.mercos.filainteligente",
-    "productName": "Fila Inteligente",
+    "appId": "br.com.mercos.filainteligente.inbound",
+    "productName": "Fila Inteligente Inbound",
     "directories": {
       "output": "release"
     },

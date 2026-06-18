@@ -542,7 +542,7 @@ function parseSaasMovementRows(content: string, kind: SaasMovementKind): Executi
 
   return matrix.slice(1).reduce<ExecutiveSaasMovementRow[]>((accumulator, row) => {
     const acquisitionChannel = asString(row[resolvedIdxAcquisitionChannel]);
-    if (normalizeLabel(acquisitionChannel) !== "parcerias") {
+    if (normalizeLabel(acquisitionChannel) !== "inbound") {
       return accumulator;
     }
 

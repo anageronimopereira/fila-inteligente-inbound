@@ -35,7 +35,7 @@ export function PostConclusionCancellationsPanel({
         <p style={styles.eyebrow}>Cancelamentos iniciais</p>
         <h2 style={styles.title}>Cancelamentos ate 6 meses apos a 1a receita</h2>
         <p style={styles.subtitle}>
-          Esta aba considera apenas clientes de Parcerias que cancelaram ate 6 meses depois da
+          Esta aba considera apenas clientes de Inbound que cancelaram ate 6 meses depois da
           primeira receita. Se o Responsavel CS for um implanter, classificamos como cancelamento
           na implantacao; caso contrario, como cliente ja concluido que cancelou cedo.
         </p>
@@ -82,7 +82,7 @@ export function PostConclusionCancellationsPanel({
 
       {hasCancellationRows && summary.rows.length === 0 ? (
         <div style={styles.emptyState}>
-          Nenhum cliente de Parcerias cancelou ate 6 meses apos a 1a receita nesta base.
+          Nenhum cliente de Inbound cancelou ate 6 meses apos a 1a receita nesta base.
         </div>
       ) : null}
 

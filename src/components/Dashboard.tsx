@@ -630,9 +630,9 @@ export function Dashboard(): JSX.Element {
               <span style={styles.brandMarkGreen} />
               <span style={styles.brandMarkWhite} />
             </div>
-            <span style={styles.brandBadge}>Mercos Implantação Ops</span>
+            <span style={styles.brandBadge}>Mercos Inbound Ops</span>
           </div>
-          <p style={styles.eyebrow}>Priorização de implantação</p>
+          <p style={styles.eyebrow}>Priorização de inbound</p>
           <h1 style={styles.title}>Fila inteligente de projetos por risco</h1>
           <p style={styles.subtitle}>
             Suba arquivos CSV ou XLSX do sistema e transforme a carteira do implanter em uma

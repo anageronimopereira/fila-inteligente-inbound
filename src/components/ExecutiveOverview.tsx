@@ -88,7 +88,7 @@ export function ExecutiveOverview({
       <section style={styles.panel}>
         <div style={styles.panelHeader}>
           <p style={styles.panelEyebrow}>Visão geral</p>
-          <h3 style={styles.panelTitle}>Visão Geral da Implantação — Parcerias</h3>
+          <h3 style={styles.panelTitle}>Visão Geral da Implantação — Inbound</h3>
         </div>
 
         <div style={styles.metricGrid}>
@@ -169,7 +169,7 @@ export function ExecutiveOverview({
         </div>
 
         <div style={styles.metricGrid}>
-          <MetricCard label="Cancelamentos implantação" value={summary.totalCancellationProjects} detail="eventos SaaS de Parcerias com Responsável CS implanter" tone="critical" compact />
+          <MetricCard label="Cancelamentos implantação" value={summary.totalCancellationProjects} detail="eventos SaaS de Inbound com Responsável CS implanter" tone="critical" compact />
           <MetricCard label="MRR cancelamento implantação" value={formatCurrencyBRL(summary.totalCancellationMrr)} detail="soma do Valor Cancelled no Metrics" tone="critical" compact />
           <MetricCard label="Ticket médio" value={formatCurrencyBRL(summary.averageCancellationTicket)} detail="MRR médio por cancelamento de implantação" tone="warning" compact />
         </div>
@@ -272,7 +272,7 @@ export function ExecutiveOverview({
           <MetricCard
             label="MRR cancelamento total"
             value={formatCurrencyBRL(summary.saasRetention.cancellation.totalValue)}
-            detail={`${summary.saasRetention.cancellation.totalCount} evento(s) em Parcerias`}
+            detail={`${summary.saasRetention.cancellation.totalCount} evento(s) em Inbound`}
             tone={summary.saasRetention.cancellation.totalValue > 0 ? "critical" : "neutral"}
             compact
           />
@@ -286,7 +286,7 @@ export function ExecutiveOverview({
           <MetricCard
             label="MRR contraction total"
             value={formatCurrencyBRL(summary.saasRetention.contraction.totalValue)}
-            detail={`${summary.saasRetention.contraction.totalCount} evento(s) em Parcerias`}
+            detail={`${summary.saasRetention.contraction.totalCount} evento(s) em Inbound`}
             tone={summary.saasRetention.contraction.totalValue > 0 ? "warning" : "neutral"}
             compact
           />
@@ -300,7 +300,7 @@ export function ExecutiveOverview({
           <MetricCard
             label="MRR expansão total"
             value={formatCurrencyBRL(summary.saasRetention.expansion.totalValue)}
-            detail={`${summary.saasRetention.expansion.totalCount} evento(s) em Parcerias`}
+            detail={`${summary.saasRetention.expansion.totalCount} evento(s) em Inbound`}
             tone={summary.saasRetention.expansion.totalValue > 0 ? "positive" : "neutral"}
             compact
           />

@@ -33,7 +33,7 @@ function createMainWindow() {
     height: 920,
     minWidth: 1100,
     minHeight: 720,
-    title: "Fila Inteligente",
+    title: "Fila Inteligente Inbound",
     backgroundColor: "#f8fafc",
     autoHideMenuBar: true,
     webPreferences: {
