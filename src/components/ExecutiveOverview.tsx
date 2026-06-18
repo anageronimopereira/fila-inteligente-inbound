@@ -1823,8 +1823,8 @@ function diffCalendarMonths(start: Date, end: Date): number {
 }
 
 function isMidImplanter(implanter: string): boolean {
-  const normalized = normalize(implanter);
-  return normalized === "aline andrade" || normalized === "aline santos" || normalized === "maria marcos" || normalized === "maria";
+  void implanter;
+  return false;
 }
 
 function normalize(value?: string): string {

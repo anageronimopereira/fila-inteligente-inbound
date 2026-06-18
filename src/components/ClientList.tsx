@@ -448,8 +448,8 @@ function getImplanterTargetDays(implanter: string): number {
 }
 
 function isMidImplanter(implanter: string): boolean {
-  const normalized = implanter.trim().toLowerCase();
-  return normalized === "aline andrade" || normalized === "aline santos" || normalized === "maria marcos" || normalized === "maria";
+  void implanter;
+  return false;
 }
 
 function getLastActivityTone(

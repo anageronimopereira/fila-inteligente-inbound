@@ -20,15 +20,11 @@ import { parseFlexibleDate } from "./dateUtils";
 type Matrix = Array<Array<string | number | boolean | Date | null>>;
 
 const IMPLANTATION_RESPONSIBLE_MATCHES = [
-  "maria",
-  "aline andrade",
-  "aline santos",
-  "david",
-  "caio",
-  "jaqueline",
-  "samara",
-  "natiele",
-  "natieli",
+  "alice hermann",
+  "ana carolina lapa",
+  "ellen cristina moura",
+  "sara zanluca",
+  "tiago filipe",
 ];
 
 export async function parseExecutiveFiles(files: {

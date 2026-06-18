@@ -925,8 +925,8 @@ function clampScore(value: number): number {
 }
 
 function isMidImplanter(implanter: string): boolean {
-  const normalized = normalize(implanter);
-  return normalized === "aline andrade" || normalized === "aline santos" || normalized === "maria" || normalized === "maria marcos";
+  void implanter;
+  return false;
 }
 
 function diffDays(date: Date | null): number {

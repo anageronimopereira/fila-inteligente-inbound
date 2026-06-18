@@ -234,15 +234,11 @@ function buildEarlyCancellationSummary(executiveData: ExecutiveUploadsData | nul
 function isImplantationResponsible(value: string): boolean {
   const normalized = normalizeKey(value);
   return [
-    "maria",
-    "aline andrade",
-    "aline santos",
-    "david",
-    "caio",
-    "jaqueline",
-    "samara",
-    "natiele",
-    "natieli",
+    "alice hermann",
+    "ana carolina lapa",
+    "ellen cristina moura",
+    "sara zanluca",
+    "tiago filipe",
   ].some((name) => normalized.includes(name));
 }
 

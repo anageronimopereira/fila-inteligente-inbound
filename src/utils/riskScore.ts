@@ -900,13 +900,8 @@ function inferTargetFromRow(row: ProjectRow): number | null {
 }
 
 function isMidImplanterName(implanter: string): boolean {
-  const normalized = implanter.trim().toLowerCase();
-  return (
-    normalized === "aline andrade" ||
-    normalized === "aline santos" ||
-    normalized === "maria marcos" ||
-    normalized === "maria"
-  );
+  void implanter;
+  return false;
 }
 
 function getProjectDelayDays(row: ProjectRow): number {

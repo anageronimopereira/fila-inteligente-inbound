@@ -25,12 +25,11 @@ type DashboardTab = "direcionamento" | "implanter" | "fila" | "forecast" | "canc
 type DashboardArea = "risco" | "gestao";
 
 const DEFAULT_IMPLANTERS = [
-  "Aline Andrade",
-  "Aline Santos",
-  "David Ramos",
-  "Maria Marcos",
-  "Natieli Ambrosi",
-  "Samara Massuchetto",
+  "Alice Hermann",
+  "Ana Carolina Lapa",
+  "Ellen Cristina Moura",
+  "Sara Zanluca",
+  "Tiago Filipe",
 ] as const;
 
 const EXCLUDED_IMPLANTER_PREFIXES = ["julia", "ana cassia", "aily", "ailly"];
@@ -1097,15 +1096,7 @@ function isAllowedImplanterName(name: string): boolean {
 }
 
 function inferSegmentFromImplanter(implanter: string): "MID" | "SMB" {
-  const normalized = normalizeText(implanter);
-  if (
-    normalized === "aline andrade" ||
-    normalized === "aline santos" ||
-    normalized === "maria marcos" ||
-    normalized === "maria"
-  ) {
-    return "MID";
-  }
+  void implanter;
   return "SMB";
 }
 
